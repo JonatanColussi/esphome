@@ -1,0 +1,285 @@
+esphome:
+  name: tanquinho
+  friendly_name: tanquinho
+
+esp8266:
+  board: esp01_1m
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "qrcGZR882Nv0bS03FJtkJCUqFSOt+5B7c94UommyCn0="
+
+ota:
+  - platform: esphome
+    password: "733e2d34365c3db764bc2459f93f10f7"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Tanquinho Fallback Hotspot"
+    password: "4ovSYWtw7J48"
+
+captive_portal:
+
+web_server:
+
+switch:
+  - platform: gpio
+    name: "Rele Motor (Lavar)"
+    pin: GPIO12
+    id: tanquinho_motor
+    icon: mdi:engine
+  - platform: gpio
+    name: "Rele Bomba (Drenagem)"
+    pin: GPIO13
+    id: tanquinho_bomba_drenagem
+    icon: mdi:water-minus
+  - platform: gpio
+    name: "Rele Entrada Água"
+    pin: GPIO14
+    id: tanquinho_entrada_agua
+    icon: mdi:water-plus
+  - platform: template
+    name: "Ligar Tanquinho"
+    id: tanquinho_ligar
+    icon: "mdi:washing-machine"
+    optimistic: true
+    turn_on_action:
+      - logger.log: "Tanquinho Ligado - Iniciando processo automático"
+      - script.execute: processo_automatico
+    turn_off_action:
+      - logger.log: "Tanquinho Desligado - Interrompendo processo"
+      - script.execute: estado_desligado
+
+text_sensor:
+  - platform: template
+    name: "Estado"
+    id: tanquinho_estado
+    icon: mdi:pin-outline
+    lambda: |-
+      if (id(current_state) == 0) return std::string("Desligado");
+      if (id(current_state) == 1) return std::string("Enchendo");
+      if (id(current_state) == 2) return std::string("Misturando");
+      if (id(current_state) == 3) return std::string("Lavando");
+      if (id(current_state) == 4) return std::string("Molho");
+      if (id(current_state) == 5) return std::string("Drenando");
+      return std::string("Desconhecido");
+  - platform: template
+    name: "Tempo Restante (min)"
+    id: tanquinho_tempo_restante
+    icon: mdi:timer
+
+globals:
+  - id: current_state
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: start_time
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: total_time
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+script:
+  - id: estado_desligado
+    then:
+      - switch.turn_off: tanquinho_motor
+      - switch.turn_off: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_entrada_agua
+      - switch.turn_off: tanquinho_ligar
+      - lambda: |-
+          id(current_state) = 0;
+          id(start_time) = 0;
+          id(total_time) = 0;
+          id(tanquinho_tempo_restante).publish_state("00:00:00");
+      - text_sensor.template.publish:
+          id: tanquinho_estado
+          state: "Desligado"
+
+  - id: estado_enchendo
+    then:
+      - switch.turn_off: tanquinho_motor
+      - switch.turn_off: tanquinho_bomba_drenagem
+      - switch.turn_on: tanquinho_entrada_agua
+      - lambda: |-
+          id(current_state) = 1;
+      - text_sensor.template.publish:
+          id: tanquinho_estado
+          state: "Enchendo"
+
+  - id: estado_misturando
+    then:
+      - switch.turn_on: tanquinho_motor
+      - switch.turn_off: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_entrada_agua
+      - lambda: |-
+          id(current_state) = 2;
+      - text_sensor.template.publish:
+          id: tanquinho_estado
+          state: "Misturando"
+
+  - id: estado_lavando
+    then:
+      - switch.turn_on: tanquinho_motor
+      - switch.turn_off: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_entrada_agua
+      - lambda: |-
+          id(current_state) = 3;
+      - text_sensor.template.publish:
+          id: tanquinho_estado
+          state: "Lavando"
+
+  - id: estado_molho
+    then:
+      - switch.turn_off: tanquinho_motor
+      - switch.turn_off: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_entrada_agua
+      - lambda: |-
+          id(current_state) = 4;
+      - text_sensor.template.publish:
+          id: tanquinho_estado
+          state: "Molho"
+
+  - id: estado_drenando
+    then:
+      - switch.turn_on: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_motor
+      - switch.turn_off: tanquinho_entrada_agua
+      - lambda: |-
+          id(current_state) = 5;
+      - text_sensor.template.publish:
+          id: tanquinho_estado
+          state: "Drenando"
+
+  - id: processo_automatico
+    mode: parallel
+    then:
+      - lambda: |-
+          id(start_time) = millis();  // registrar a hora de início do processo
+          int tempo_total = (
+            (id(tanquinho_tempo_enchendo).state * 60) +
+            (id(tanquinho_tempo_misturando).state * 60) +
+            (id(tanquinho_tempo_molho).state * 60) +
+            (id(tanquinho_tempo_lavando).state * 60) +
+            (id(tanquinho_tempo_drenando).state * 60)
+          );
+          id(total_time) = tempo_total * id(tanquinho_ciclos).state;  // Tempo total do ciclo
+      - repeat:
+          count: !lambda 'return id(tanquinho_ciclos).state;'
+          then:
+            - script.execute: estado_enchendo
+            - delay: !lambda 'return id(tanquinho_tempo_enchendo).state * 60000;'
+            - script.execute: estado_misturando
+            - delay: !lambda 'return id(tanquinho_tempo_misturando).state * 60000;'
+            - script.execute: estado_molho
+            - delay: !lambda 'return id(tanquinho_tempo_molho).state * 60000;'
+            - script.execute: estado_lavando
+            - delay: !lambda 'return id(tanquinho_tempo_lavando).state * 60000;'
+            - script.execute: estado_drenando
+            - delay: !lambda 'return id(tanquinho_tempo_drenando).state * 60000;'
+      - script.execute: estado_desligado
+
+number:
+  - platform: template
+    optimistic: true
+    name: "Tempo Lavando (min)"
+    id: tanquinho_tempo_lavando
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:rotate-3d
+    entity_category: config
+
+  - platform: template
+    optimistic: true
+    name: "Tempo Molho (min)"
+    id: tanquinho_tempo_molho
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:waves
+    entity_category: config
+
+  - platform: template
+    optimistic: true
+    name: "Tempo Misturando (min)"
+    id: tanquinho_tempo_misturando
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:rotate-right
+    entity_category: config
+
+  - platform: template
+    optimistic: true
+    name: "Tempo Enchendo (min)"
+    id: tanquinho_tempo_enchendo
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-plus
+    entity_category: config
+
+  - platform: template
+    optimistic: true
+    name: "Tempo Drenando (min)"
+    id: tanquinho_tempo_drenando
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-minus
+    entity_category: config
+
+  - platform: template
+    optimistic: true
+    name: "Ciclos"
+    id: tanquinho_ciclos
+    min_value: 1
+    max_value: 5
+    step: 1
+    icon: mdi:rotate-3d-variant
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          if (id(tanquinho_ligar).state == true) {
+            // Obter o tempo passado em segundos
+            int elapsed_time = (millis() - id(start_time)) / 1000;
+
+            // Calcular o tempo restante em segundos
+            int remaining_time = id(total_time) - elapsed_time;
+
+            // Garantir que o tempo restante não seja negativo
+            if (remaining_time < 0) {
+              remaining_time = 0;
+            }
+
+            // Converter o tempo restante para hh:mm:ss
+            int hours = remaining_time / 3600;
+            int minutes = (remaining_time % 3600) / 60;
+            int seconds = remaining_time % 60;
+
+            // Exibir o tempo no formato hh:mm:ss
+            std::string time_remaining = std::to_string(hours) + ":" +
+                                        (minutes < 10 ? "0" : "") + std::to_string(minutes) + ":" +
+                                        (seconds < 10 ? "0" : "") + std::to_string(seconds);
+
+            // Publicar o estado do tempo restante
+            id(tanquinho_tempo_restante).publish_state(time_remaining);
+          }

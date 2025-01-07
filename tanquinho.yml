@@ -72,7 +72,7 @@ text_sensor:
       if (id(current_state) == 5) return std::string("Drenando");
       return std::string("Desconhecido");
   - platform: template
-    name: "Tempo Restante (min)"
+    name: "Tempo Restante"
     id: tanquinho_tempo_restante
     icon: mdi:timer
 
@@ -102,9 +102,6 @@ script:
           id(start_time) = 0;
           id(total_time) = 0;
           id(tanquinho_tempo_restante).publish_state("00:00:00");
-      - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Desligado"
 
   - id: estado_enchendo
     then:
@@ -113,9 +110,6 @@ script:
       - switch.turn_on: tanquinho_entrada_agua
       - lambda: |-
           id(current_state) = 1;
-      - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Enchendo"
 
   - id: estado_misturando
     then:
@@ -124,9 +118,6 @@ script:
       - switch.turn_off: tanquinho_entrada_agua
       - lambda: |-
           id(current_state) = 2;
-      - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Misturando"
 
   - id: estado_lavando
     then:
@@ -135,9 +126,6 @@ script:
       - switch.turn_off: tanquinho_entrada_agua
       - lambda: |-
           id(current_state) = 3;
-      - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Lavando"
 
   - id: estado_molho
     then:
@@ -146,9 +134,6 @@ script:
       - switch.turn_off: tanquinho_entrada_agua
       - lambda: |-
           id(current_state) = 4;
-      - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Molho"
 
   - id: estado_drenando
     then:
@@ -157,9 +142,6 @@ script:
       - switch.turn_off: tanquinho_entrada_agua
       - lambda: |-
           id(current_state) = 5;
-      - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Drenando"
 
   - id: processo_automatico
     mode: parallel

@@ -33,19 +33,23 @@ web_server:
 switch:
   - platform: gpio
     name: "Rele Motor (Lavar)"
-    pin: GPIO12
+    pin: GPIO5
     id: tanquinho_motor
     icon: mdi:engine
   - platform: gpio
     name: "Rele Bomba (Drenagem)"
-    pin: GPIO13
+    pin: GPIO4
     id: tanquinho_bomba_drenagem
     icon: mdi:water-minus
   - platform: gpio
     name: "Rele Entrada Água"
-    pin: GPIO14
+    pin: GPIO12
     id: tanquinho_entrada_agua
     icon: mdi:water-plus
+  - platform: gpio
+    name: "Auxiliar"
+    pin: GPIO14
+    id: tanquinho_auxiliar
   - platform: template
     name: "Ligar Tanquinho"
     id: tanquinho_ligar
@@ -63,113 +67,10 @@ text_sensor:
     name: "Estado"
     id: tanquinho_estado
     icon: mdi:pin-outline
-    lambda: |-
-      if (id(current_state) == 0) return std::string("Desligado");
-      if (id(current_state) == 1) return std::string("Enchendo");
-      if (id(current_state) == 2) return std::string("Misturando");
-      if (id(current_state) == 3) return std::string("Lavando");
-      if (id(current_state) == 4) return std::string("Molho");
-      if (id(current_state) == 5) return std::string("Drenando");
-      return std::string("Desconhecido");
   - platform: template
     name: "Tempo Restante"
     id: tanquinho_tempo_restante
     icon: mdi:timer
-
-globals:
-  - id: current_state
-    type: int
-    restore_value: no
-    initial_value: '0'
-  - id: start_time
-    type: int
-    restore_value: no
-    initial_value: '0'
-  - id: total_time
-    type: int
-    restore_value: no
-    initial_value: '0'
-
-script:
-  - id: estado_desligado
-    then:
-      - switch.turn_off: tanquinho_motor
-      - switch.turn_off: tanquinho_bomba_drenagem
-      - switch.turn_off: tanquinho_entrada_agua
-      - switch.turn_off: tanquinho_ligar
-      - lambda: |-
-          id(current_state) = 0;
-          id(start_time) = 0;
-          id(total_time) = 0;
-          id(tanquinho_tempo_restante).publish_state("00:00:00");
-
-  - id: estado_enchendo
-    then:
-      - switch.turn_off: tanquinho_motor
-      - switch.turn_off: tanquinho_bomba_drenagem
-      - switch.turn_on: tanquinho_entrada_agua
-      - lambda: |-
-          id(current_state) = 1;
-
-  - id: estado_misturando
-    then:
-      - switch.turn_on: tanquinho_motor
-      - switch.turn_off: tanquinho_bomba_drenagem
-      - switch.turn_off: tanquinho_entrada_agua
-      - lambda: |-
-          id(current_state) = 2;
-
-  - id: estado_lavando
-    then:
-      - switch.turn_on: tanquinho_motor
-      - switch.turn_off: tanquinho_bomba_drenagem
-      - switch.turn_off: tanquinho_entrada_agua
-      - lambda: |-
-          id(current_state) = 3;
-
-  - id: estado_molho
-    then:
-      - switch.turn_off: tanquinho_motor
-      - switch.turn_off: tanquinho_bomba_drenagem
-      - switch.turn_off: tanquinho_entrada_agua
-      - lambda: |-
-          id(current_state) = 4;
-
-  - id: estado_drenando
-    then:
-      - switch.turn_on: tanquinho_bomba_drenagem
-      - switch.turn_off: tanquinho_motor
-      - switch.turn_off: tanquinho_entrada_agua
-      - lambda: |-
-          id(current_state) = 5;
-
-  - id: processo_automatico
-    mode: parallel
-    then:
-      - lambda: |-
-          id(start_time) = millis();  // registrar a hora de início do processo
-          int tempo_total = (
-            (id(tanquinho_tempo_enchendo).state * 60) +
-            (id(tanquinho_tempo_misturando).state * 60) +
-            (id(tanquinho_tempo_molho).state * 60) +
-            (id(tanquinho_tempo_lavando).state * 60) +
-            (id(tanquinho_tempo_drenando).state * 60)
-          );
-          id(total_time) = tempo_total * id(tanquinho_ciclos).state;  // Tempo total do ciclo
-      - repeat:
-          count: !lambda 'return id(tanquinho_ciclos).state;'
-          then:
-            - script.execute: estado_enchendo
-            - delay: !lambda 'return id(tanquinho_tempo_enchendo).state * 60000;'
-            - script.execute: estado_misturando
-            - delay: !lambda 'return id(tanquinho_tempo_misturando).state * 60000;'
-            - script.execute: estado_molho
-            - delay: !lambda 'return id(tanquinho_tempo_molho).state * 60000;'
-            - script.execute: estado_lavando
-            - delay: !lambda 'return id(tanquinho_tempo_lavando).state * 60000;'
-            - script.execute: estado_drenando
-            - delay: !lambda 'return id(tanquinho_tempo_drenando).state * 60000;'
-      - script.execute: estado_desligado
 
 number:
   - platform: template
@@ -235,6 +136,133 @@ number:
     max_value: 5
     step: 1
     icon: mdi:rotate-3d-variant
+
+globals:
+  - id: start_time
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: total_time
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+script:
+  - id: estado_desligado
+    then:
+      - switch.turn_off: tanquinho_motor
+      - switch.turn_off: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_entrada_agua
+      - switch.turn_off: tanquinho_ligar
+      - lambda: |-
+          id(tanquinho_estado).publish_state("Desligado");
+          id(start_time) = 0;
+          id(total_time) = 0;
+          id(tanquinho_tempo_restante).publish_state("00:00:00");
+
+  - id: estado_enchendo
+    then:
+      - lambda: |-
+          if (id(tanquinho_ligar).state == true) {
+            // Atualizar o estado atual
+            id(tanquinho_estado).publish_state("Enchendo");
+
+            // Desligar motor e bomba de drenagem
+            id(tanquinho_motor).turn_off();
+            id(tanquinho_bomba_drenagem).turn_off();
+
+            // Ativar entrada de água
+            id(tanquinho_entrada_agua).turn_on();
+          }
+
+  - id: estado_misturando
+    then:
+      - lambda: |-
+          if (id(tanquinho_ligar).state == true) {
+            // Atualizar o estado atual
+            id(tanquinho_estado).publish_state("Misturando");
+
+            // Desligar entrada de água e bomba de drenagem
+            id(tanquinho_entrada_agua).turn_off();
+            id(tanquinho_bomba_drenagem).turn_off();
+
+            // Ativar motor
+            id(tanquinho_motor).turn_on();
+          }
+
+  - id: estado_lavando
+    then:
+      - lambda: |-
+          if (id(tanquinho_ligar).state == true) {
+            // Atualizar o estado atual
+            id(tanquinho_estado).publish_state("Lavando");
+
+            // Desligar entrada de água e bomba de drenagem
+            id(tanquinho_entrada_agua).turn_off();
+            id(tanquinho_bomba_drenagem).turn_off();
+
+            // Ativar motor
+            id(tanquinho_motor).turn_on();
+          }
+
+  - id: estado_molho
+    then:
+      - lambda: |-
+          if (id(tanquinho_ligar).state == true) {
+            // Atualizar o estado atual
+            id(tanquinho_estado).publish_state("Molho");
+
+            // Desligar entrada de água, motor e bomba de drenagem
+            id(tanquinho_entrada_agua).turn_off();
+            id(tanquinho_motor).turn_off();
+            id(tanquinho_bomba_drenagem).turn_off();
+          }
+
+  - id: estado_drenando
+    then:
+      - switch.turn_on: tanquinho_bomba_drenagem
+      - switch.turn_off: tanquinho_motor
+      - switch.turn_off: tanquinho_entrada_agua
+      - lambda: |-
+          if (id(tanquinho_ligar).state == true) {
+            // Atualizar o estado atual
+            id(tanquinho_estado).publish_state("Drenando");
+
+            // Desligar entrada de água e motor
+            id(tanquinho_motor).turn_off();
+            id(tanquinho_entrada_agua).turn_off();
+
+            // Ativar bomba de drenagem
+            id(tanquinho_bomba_drenagem).turn_on();
+          }
+
+  - id: processo_automatico
+    mode: parallel
+    then:
+      - lambda: |-
+          id(start_time) = millis();  // registrar a hora de início do processo
+          int tempo_total = (
+            (id(tanquinho_tempo_enchendo).state * 60) +
+            (id(tanquinho_tempo_misturando).state * 60) +
+            (id(tanquinho_tempo_molho).state * 60) +
+            (id(tanquinho_tempo_lavando).state * 60) +
+            (id(tanquinho_tempo_drenando).state * 60)
+          );
+          id(total_time) = tempo_total * id(tanquinho_ciclos).state;  // Tempo total do ciclo
+      - repeat:
+          count: !lambda 'return id(tanquinho_ciclos).state;'
+          then:
+            - script.execute: estado_enchendo
+            - delay: !lambda 'return id(tanquinho_tempo_enchendo).state * 60000;'
+            - script.execute: estado_misturando
+            - delay: !lambda 'return id(tanquinho_tempo_misturando).state * 60000;'
+            - script.execute: estado_molho
+            - delay: !lambda 'return id(tanquinho_tempo_molho).state * 60000;'
+            - script.execute: estado_lavando
+            - delay: !lambda 'return id(tanquinho_tempo_lavando).state * 60000;'
+            - script.execute: estado_drenando
+            - delay: !lambda 'return id(tanquinho_tempo_drenando).state * 60000;'
+      - script.execute: estado_desligado
 
 interval:
   - interval: 10s

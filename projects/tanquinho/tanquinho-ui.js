@@ -210,12 +210,13 @@
       });
     }
 
-    function campoTempo(rotulo, nameId) {
-      var input = el('input', { type: 'number', min: '0.5', max: '30', step: '0.5', inputmode: 'decimal' });
+    function campoTempo(rotulo, nameId, max) {
+      max = max || 30;
+      var input = el('input', { type: 'number', min: '0.5', max: String(max), step: '0.5', inputmode: 'decimal' });
       input.addEventListener('change', function () {
         var v = parseFloat(String(input.value).replace(',', '.'));
         if (isNaN(v)) return;
-        v = Math.min(30, Math.max(0.5, Math.round(v * 2) / 2));
+        v = Math.min(max, Math.max(0.5, Math.round(v * 2) / 2));
         enviar(nameId, 'set', { value: v });
       });
       ui.campos.push([input, nameId]);
@@ -281,9 +282,10 @@
     var ajustes = el('details', { 'class': 'card' }, [
       el('summary', { text: '⚙️ Ajustes' }),
       el('p', { 'class': 'rot', text: 'Tempos de cada nível (minutos)' }),
-      campoTempo('Encher no Baixo', E.encher.Baixo),
-      campoTempo('Encher no Médio', E.encher.Medio),
-      campoTempo('Encher no Alto', E.encher.Alto),
+      // Máximo 10 min: a válvula de água desliga sozinha aos 10 min (limite_agua no firmware).
+      campoTempo('Encher no Baixo', E.encher.Baixo, 10),
+      campoTempo('Encher no Médio', E.encher.Medio, 10),
+      campoTempo('Encher no Alto', E.encher.Alto, 10),
       campoTempo('Esvaziar no Baixo', E.drenar.Baixo),
       campoTempo('Esvaziar no Médio', E.drenar.Medio),
       campoTempo('Esvaziar no Alto', E.drenar.Alto),

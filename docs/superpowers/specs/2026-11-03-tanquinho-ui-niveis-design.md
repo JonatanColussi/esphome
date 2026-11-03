@@ -41,8 +41,9 @@ celular (navegador) ──HTTP──> ESP32 web_server :80
 - `select` template `Nivel`, opções `Baixo`, `Medio`, `Alto`, `optimistic`,
   `restore_value: true`, inicial `Medio`. Nomes de entidade e opções ficam sem
   acento porque entram na URL da API REST; a tela mostra "Nível" e "Médio".
-- Seis `number` template (`entity_category: config`, 0,5–30 min, passo 0,5,
-  `restore_value: true`):
+- Seis `number` template (`entity_category: config`, passo 0,5,
+  `restore_value: true`; Enchendo 0,5–10 min, para nunca passar do limite de
+  10 min da válvula de água; Drenando 0,5–30 min):
 
   | Entidade | Inicial |
   |---|---|

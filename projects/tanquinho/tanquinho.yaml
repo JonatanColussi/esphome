@@ -97,7 +97,7 @@ number:
     name: "Enchendo Baixo (min)"
     id: enchendo_baixo
     min_value: 0.5
-    max_value: 30
+    max_value: 10
     step: 0.5
     unit_of_measurement: "min"
     icon: mdi:water-plus
@@ -110,7 +110,7 @@ number:
     name: "Enchendo Medio (min)"
     id: enchendo_medio
     min_value: 0.5
-    max_value: 30
+    max_value: 10
     step: 0.5
     unit_of_measurement: "min"
     icon: mdi:water-plus
@@ -123,7 +123,7 @@ number:
     name: "Enchendo Alto (min)"
     id: enchendo_alto
     min_value: 0.5
-    max_value: 30
+    max_value: 10
     step: 0.5
     unit_of_measurement: "min"
     icon: mdi:water-plus

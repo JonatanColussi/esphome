@@ -45,19 +45,125 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'
+  - id: t_encher_ms
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: t_misturar_ms
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: t_molho_ms
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: t_lavar_ms
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: t_drenar_ms
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: ciclo_atual
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: ciclos_total
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+select:
+  - platform: template
+    name: "Nivel"
+    id: nivel
+    icon: mdi:waves-arrow-up
+    options:
+      - "Baixo"
+      - "Medio"
+      - "Alto"
+    initial_option: "Medio"
+    optimistic: true
+    restore_value: true
 
 number:
   - platform: template
     optimistic: true
-    name: "Tempo Enchendo (min)"
-    id: tempo_enchendo
+    name: "Enchendo Baixo (min)"
+    id: enchendo_baixo
     min_value: 0.5
     max_value: 30
     step: 0.5
     unit_of_measurement: "min"
     icon: mdi:water-plus
     entity_category: config
-    initial_value: 12
+    initial_value: 2.5
+    restore_value: true
+
+  - platform: template
+    optimistic: true
+    name: "Enchendo Medio (min)"
+    id: enchendo_medio
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-plus
+    entity_category: config
+    initial_value: 3.5
+    restore_value: true
+
+  - platform: template
+    optimistic: true
+    name: "Enchendo Alto (min)"
+    id: enchendo_alto
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-plus
+    entity_category: config
+    initial_value: 5
+    restore_value: true
+
+  - platform: template
+    optimistic: true
+    name: "Drenando Baixo (min)"
+    id: drenando_baixo
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-minus
+    entity_category: config
+    initial_value: 3
+    restore_value: true
+
+  - platform: template
+    optimistic: true
+    name: "Drenando Medio (min)"
+    id: drenando_medio
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-minus
+    entity_category: config
+    initial_value: 4
+    restore_value: true
+
+  - platform: template
+    optimistic: true
+    name: "Drenando Alto (min)"
+    id: drenando_alto
+    min_value: 0.5
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "min"
+    icon: mdi:water-minus
+    entity_category: config
+    initial_value: 5.5
     restore_value: true
 
   - platform: template
@@ -97,19 +203,6 @@ number:
     icon: mdi:rotate-3d
     entity_category: config
     initial_value: 15
-    restore_value: true
-
-  - platform: template
-    optimistic: true
-    name: "Tempo Drenando (min)"
-    id: tempo_drenando
-    min_value: 0.5
-    max_value: 30
-    step: 0.5
-    unit_of_measurement: "min"
-    icon: mdi:water-minus
-    entity_category: config
-    initial_value: 3.5
     restore_value: true
 
   - platform: template
@@ -187,6 +280,13 @@ button:
     on_press:
       - script.execute: estado_desligado
 
+binary_sensor:
+  - platform: template
+    name: "Em andamento"
+    id: em_andamento
+    icon: mdi:washing-machine
+    lambda: 'return id(ciclo_ativo);'
+
 text_sensor:
   - platform: template
     name: "Estado"
@@ -202,11 +302,19 @@ text_sensor:
     lambda: 'return {"00:00:00"};'
     update_interval: never
 
+  - platform: template
+    name: "Etapa"
+    id: tanquinho_etapa
+    icon: mdi:counter
+    lambda: 'return {""};'
+    update_interval: never
+
 script:
   - id: estado_desligado
     then:
       - script.stop: ciclo_completo
       - script.stop: ciclo_rapido
+      - script.stop: executar_ciclos
       - switch.turn_off: rele_agua
       - switch.turn_off: rele_motor
       - switch.turn_off: rele_drenagem
@@ -219,12 +327,18 @@ script:
       - globals.set:
           id: total_time
           value: '0'
+      - globals.set:
+          id: ciclo_atual
+          value: '0'
       - text_sensor.template.publish:
           id: tanquinho_estado
           state: "Desligado"
       - text_sensor.template.publish:
           id: tanquinho_tempo_restante
           state: "00:00:00"
+      - text_sensor.template.publish:
+          id: tanquinho_etapa
+          state: ""
 
   - id: estado_enchendo
     then:
@@ -271,59 +385,73 @@ script:
           id: tanquinho_estado
           state: "Drenando"
 
+  # Congela os tempos do nível ativo para o ciclo que vai começar.
+  - id: preparar_ciclo
+    parameters:
+      rapido: bool
+    then:
+      - lambda: |-
+          auto idx = id(nivel).active_index();
+          size_t n = idx.has_value() ? *idx : 1;
+          float encher[] = {id(enchendo_baixo).state, id(enchendo_medio).state, id(enchendo_alto).state};
+          float drenar[] = {id(drenando_baixo).state, id(drenando_medio).state, id(drenando_alto).state};
+          float fator = rapido ? 0.5f : 1.0f;
+
+          id(t_encher_ms) = (int) (encher[n] * 60000);
+          id(t_drenar_ms) = (int) (drenar[n] * 60000);
+          id(t_misturar_ms) = (int) (id(tempo_misturando).state * 60000 * fator);
+          id(t_lavar_ms) = (int) (id(tempo_lavando).state * 60000 * fator);
+          id(t_molho_ms) = rapido ? 0 : (int) (id(tempo_molho).state * 60000);
+
+          id(ciclos_total) = (int) id(qtd_ciclos).state;
+          id(ciclo_atual) = 0;
+          int por_ciclo_ms = id(t_encher_ms) + id(t_misturar_ms) + id(t_molho_ms) +
+                             id(t_lavar_ms) + id(t_drenar_ms);
+          id(total_time) = (por_ciclo_ms / 1000) * id(ciclos_total);
+          id(start_time) = millis();
+          id(ciclo_ativo) = true;
+
+  - id: executar_ciclos
+    then:
+      - repeat:
+          count: !lambda 'return id(ciclos_total);'
+          then:
+            - lambda: |-
+                id(ciclo_atual) += 1;
+                id(tanquinho_etapa).publish_state(
+                  "Ciclo " + std::to_string(id(ciclo_atual)) + " de " + std::to_string(id(ciclos_total)));
+            - script.execute: estado_enchendo
+            - delay: !lambda 'return id(t_encher_ms);'
+            - script.execute: estado_misturando
+            - delay: !lambda 'return id(t_misturar_ms);'
+            - if:
+                condition:
+                  lambda: 'return id(t_molho_ms) > 0;'
+                then:
+                  - script.execute: estado_molho
+                  - delay: !lambda 'return id(t_molho_ms);'
+            - script.execute: estado_lavando
+            - delay: !lambda 'return id(t_lavar_ms);'
+            - script.execute: estado_drenando
+            - delay: !lambda 'return id(t_drenar_ms);'
+      - script.execute: estado_desligado
+
   - id: ciclo_completo
     then:
-      - globals.set:
-          id: ciclo_ativo
-          value: 'true'
-      - lambda: |-
-          id(start_time) = millis();
-          int tempo_por_ciclo =
-            (id(tempo_enchendo).state * 60) +
-            (id(tempo_misturando).state * 60) +
-            (id(tempo_molho).state * 60) +
-            (id(tempo_lavando).state * 60) +
-            (id(tempo_drenando).state * 60);
-          id(total_time) = tempo_por_ciclo * (int)id(qtd_ciclos).state;
-      - repeat:
-          count: !lambda 'return (int)id(qtd_ciclos).state;'
-          then:
-            - script.execute: estado_enchendo
-            - delay: !lambda 'return id(tempo_enchendo).state * 60000;'
-            - script.execute: estado_misturando
-            - delay: !lambda 'return id(tempo_misturando).state * 60000;'
-            - script.execute: estado_molho
-            - delay: !lambda 'return id(tempo_molho).state * 60000;'
-            - script.execute: estado_lavando
-            - delay: !lambda 'return id(tempo_lavando).state * 60000;'
-            - script.execute: estado_drenando
-            - delay: !lambda 'return id(tempo_drenando).state * 60000;'
-      - script.execute: estado_desligado
+      - script.execute:
+          id: preparar_ciclo
+          rapido: false
+      - script.execute: executar_ciclos
 
   - id: ciclo_rapido
     then:
-      - globals.set:
-          id: ciclo_ativo
-          value: 'true'
-      - lambda: |-
-          id(start_time) = millis();
-          id(total_time) =
-            (id(tempo_enchendo).state * 30) +
-            (id(tempo_misturando).state * 30) +
-            (id(tempo_lavando).state * 30) +
-            (id(tempo_drenando).state * 30);
-      - script.execute: estado_enchendo
-      - delay: !lambda 'return id(tempo_enchendo).state * 30000;'
-      - script.execute: estado_misturando
-      - delay: !lambda 'return id(tempo_misturando).state * 30000;'
-      - script.execute: estado_lavando
-      - delay: !lambda 'return id(tempo_lavando).state * 30000;'
-      - script.execute: estado_drenando
-      - delay: !lambda 'return id(tempo_drenando).state * 30000;'
-      - script.execute: estado_desligado
+      - script.execute:
+          id: preparar_ciclo
+          rapido: true
+      - script.execute: executar_ciclos
 
 interval:
-  - interval: 10s
+  - interval: 1s
     then:
       - lambda: |-
           if (id(ciclo_ativo)) {

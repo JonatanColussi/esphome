@@ -159,7 +159,7 @@
     '#tq-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;',
     'padding:10px 16px;border-radius:10px;font:14px system-ui,sans-serif;display:none;z-index:10}',
     '#tq-voltar{position:fixed;right:12px;bottom:12px;z-index:10;padding:10px 14px;border-radius:12px;',
-    'border:0;background:#1677ff;color:#fff;font:15px system-ui,sans-serif}',
+    'border:0;background:#1677ff;color:#fff;font:15px system-ui,sans-serif;min-height:48px}',
     'body.tq-amigavel #tq-voltar{display:none}',
     '@keyframes tq-gira{to{transform:rotate(360deg)}}',
     '@media (prefers-reduced-motion:reduce){#tq .agora .icone{animation:none}}'
@@ -252,9 +252,9 @@
         el('div', { 'class': 'niveis' }, botoesNivel)]),
       el('div', { 'class': 'card ciclos' }, [
         el('span', { text: 'Quantos ciclos' }),
-        el('button', { type: 'button', 'aria-label': 'Menos ciclos', text: '−', onclick: function () { mudarCiclos(-1); } }),
+        ui.menos = el('button', { type: 'button', 'aria-label': 'Menos ciclos', text: '−', onclick: function () { mudarCiclos(-1); } }),
         ui.ciclosValor,
-        el('button', { type: 'button', 'aria-label': 'Mais ciclos', text: '+', onclick: function () { mudarCiclos(1); } })
+        ui.mais = el('button', { type: 'button', 'aria-label': 'Mais ciclos', text: '+', onclick: function () { mudarCiclos(1); } })
       ]),
       ui.btnCompleta,
       ui.btnRapida
@@ -320,6 +320,10 @@
       ui.parado.style.display = rodando ? 'none' : '';
       ui.rodando.style.display = rodando ? '' : 'none';
       ui.btnCompleta.disabled = ui.btnRapida.disabled = !conectado;
+      ui.menos.disabled = ui.mais.disabled = !conectado;
+      NIVEIS.forEach(function (n) { ui.niveis[n].disabled = !conectado; });
+      ui.campos.forEach(function (c) { c[0].disabled = !conectado; });
+      ui.reles.forEach(function (r) { r[0].disabled = !conectado; });
 
       NIVEIS.forEach(function (n) { ui.niveis[n].classList.toggle('ativo', n === nivel); });
       ui.ciclosValor.textContent = String(Math.round(num(states, E.ciclos, 1)));

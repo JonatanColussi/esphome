@@ -72,13 +72,14 @@ celular (navegador) ──HTTP──> ESP32 web_server :80
 - `Tempo Restante` passa a ser publicado a cada 1 s (antes 10 s).
 
 **Página**
-- `web_server: js_include: tanquinho-ui.js`. Versão (2) e `js_url` ficam como
-  hoje. O ESPHome 2026.4 gera o índice com `<script type=module src=/0.js>`
-  antes do `www.js` remoto; a tela amigável vem do ESP e funciona sem internet,
-  e só o "Avançado" (interface padrão) depende do `www.js` da internet, como
-  hoje. `local: true` não é usado: o índice embutido por ele não carrega `/0.js`.
+- `web_server: js_include: tanquinho-ui.js`, `js_url` vazio. O ESPHome 2026.4
+  gera o índice com `<script type=module src=/0.js>`; a tela amigável vem do
+  ESP e funciona sem internet. A interface padrão (`www.js` da internet) só é
+  carregada quando a pessoa toca em "Avançado", para não abrir uma segunda
+  conexão `/events` por celular. `local: true` não é usado: o índice embutido
+  por ele não carrega `/0.js`.
 
-**Sem mudança**: relés manuais, `PARAR TUDO`, `on_boot` desligando tudo, trava
+**Sem mudança**: relés manuais, `on_boot` desligando tudo, trava
 `ciclo_ativo` contra ciclo duplo, nome de rede.
 
 ### 2. Tela (`projects/tanquinho/tanquinho-ui.js`)
@@ -101,7 +102,7 @@ link "Avançado" no rodapé alterna de volta para a interface padrão.
 
 **⚙️ Ajustes** (recolhido)
 - Os 6 tempos de nível, Misturando, Molho, Lavando.
-- Relés manuais (Água, Motor, Bomba, Auxiliar) com aviso "uso manual".
+- Relés manuais (Água, Motor, Bomba, Auxiliar) com aviso "uso manual"; ficam desativados enquanto um ciclo roda.
 
 **Conexão**
 - Lê `/events` com `EventSource`; estado em memória indexado pelo `id` da
@@ -122,6 +123,12 @@ Não há manifest: o ESP só serve `/` e `/0.js`.
   local; o estado só muda pelo que chega em `/events`.
 - Iniciar com ciclo ativo continua bloqueado no firmware, não só na tela.
 - `Parar` sempre visível durante o ciclo e sempre pede confirmação.
+- A válvula de água desliga sozinha após 10 min ligada.
+- Água e bomba nunca ligadas juntas; motor e bomba nunca ligados juntos
+  (intertravamento no firmware).
+- `PARAR TUDO` desliga também o Auxiliar.
+- `api` e `wifi` com `reboot_timeout: 0s` para uma lavagem longa não ser
+  abortada por reinício.
 
 ## Testes
 

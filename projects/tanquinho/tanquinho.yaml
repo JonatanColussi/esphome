@@ -14,6 +14,7 @@ esp32:
 logger:
 
 api:
+  reboot_timeout: 0s
   encryption:
     key: !secret api_key
 
@@ -22,6 +23,7 @@ ota:
     password: !secret ota_password
 
 wifi:
+  reboot_timeout: 0s
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   ap:
@@ -32,6 +34,7 @@ captive_portal:
 
 web_server:
   js_include: tanquinho-ui.js
+  js_url: ""
 
 globals:
   - id: ciclo_ativo
@@ -227,6 +230,11 @@ switch:
     id: rele_agua
     icon: mdi:water-plus
     restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: rele_drenagem
+      - script.execute: limite_agua
+    on_turn_off:
+      - script.stop: limite_agua
 
   - platform: gpio
     name: "Rele Motor"
@@ -236,6 +244,8 @@ switch:
     id: rele_motor
     icon: mdi:engine
     restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: rele_drenagem
 
   - platform: gpio
     name: "Rele Bomba Drenagem"
@@ -245,6 +255,9 @@ switch:
     id: rele_drenagem
     icon: mdi:water-minus
     restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_off: rele_agua
+      - switch.turn_off: rele_motor
 
   - platform: gpio
     name: "Auxiliar"
@@ -311,6 +324,13 @@ text_sensor:
     update_interval: never
 
 script:
+  # Válvula de água esquecida ligada fecha sozinha após 10 min.
+  - id: limite_agua
+    mode: restart
+    then:
+      - delay: 10min
+      - switch.turn_off: rele_agua
+
   - id: estado_desligado
     then:
       - script.stop: ciclo_completo
@@ -319,6 +339,7 @@ script:
       - switch.turn_off: rele_agua
       - switch.turn_off: rele_motor
       - switch.turn_off: rele_drenagem
+      - switch.turn_off: rele_auxiliar
       - globals.set:
           id: ciclo_ativo
           value: 'false'

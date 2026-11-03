@@ -296,12 +296,18 @@
       el('div', { 'class': 'reles' }, ui.reles.map(function (r) { return r[0]; }))
     ]);
 
+    var carregouPadrao = false;
     ui.raiz = el('div', { id: 'tq' }, [
       el('div', { 'class': 'faixa', text: 'Sem conexão com o tanquinho. Tentando de novo…' }),
       el('h1', { text: '🧺 Tanquinho' }),
       ui.parado, ui.rodando, ajustes,
       el('div', { 'class': 'rodape' }, [el('a', { href: '#', text: 'Avançado', onclick: function (ev) {
-        ev.preventDefault(); document.body.classList.remove('tq-amigavel');
+        ev.preventDefault();
+        if (!carregouPadrao) {
+          carregouPadrao = true;
+          document.body.appendChild(el('script', { src: 'https://oi.esphome.io/v2/www.js' }));
+        }
+        document.body.classList.remove('tq-amigavel');
       } })])
     ]);
 
@@ -323,7 +329,7 @@
       ui.menos.disabled = ui.mais.disabled = !conectado;
       NIVEIS.forEach(function (n) { ui.niveis[n].disabled = !conectado; });
       ui.campos.forEach(function (c) { c[0].disabled = !conectado; });
-      ui.reles.forEach(function (r) { r[0].disabled = !conectado; });
+      ui.reles.forEach(function (r) { r[0].disabled = !conectado || rodando; });
 
       NIVEIS.forEach(function (n) { ui.niveis[n].classList.toggle('ativo', n === nivel); });
       ui.ciclosValor.textContent = String(Math.round(num(states, E.ciclos, 1)));

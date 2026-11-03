@@ -89,7 +89,10 @@ def iniciar(rapido):
 
 
 def parar():
+    # Igual ao estado_desligado do firmware: desliga todos os relés.
     sim["restante"] = 0
+    for rele in ("switch/Rele Entrada Agua", "switch/Rele Motor", "switch/Rele Bomba Drenagem", "switch/Auxiliar"):
+        publicar(rele, False)
     publicar("binary_sensor/Em andamento", False)
     publicar("text_sensor/Estado", "Desligado")
     publicar("text_sensor/Tempo Restante", "00:00:00")

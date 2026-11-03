@@ -28,13 +28,16 @@
     completo: 'button/Iniciar Ciclo Completo',
     rapido: 'button/Iniciar Ciclo Rapido',
     parar: 'button/PARAR TUDO',
+    // [name_id, rótulo do botão, como aparece numa frase]
     reles: [
-      ['switch/Rele Entrada Agua', 'Água'],
-      ['switch/Rele Motor', 'Motor'],
-      ['switch/Rele Bomba Drenagem', 'Bomba'],
-      ['switch/Auxiliar', 'Auxiliar']
+      ['switch/Rele Entrada Agua', 'Água', 'a água'],
+      ['switch/Rele Motor', 'Motor', 'o motor'],
+      ['switch/Rele Bomba Drenagem', 'Bomba', 'a bomba'],
+      ['switch/Auxiliar', 'Auxiliar', 'o auxiliar']
     ]
   };
+
+  var ETAPAS = ['Enchendo', 'Misturando', 'Molho', 'Lavando', 'Drenando'];
 
   function commandUrl(nameId, action, params) {
     var i = nameId.indexOf('/');
@@ -99,69 +102,138 @@
     return Math.max(0, Math.min(100, pct));
   }
 
+  function horaTermino(agoraMs, segundos) {
+    var d = new Date(agoraMs + Math.round(segundos / 60) * 60000);
+    var h = d.getHours();
+    var m = d.getMinutes();
+    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  function relesLigados(states) {
+    return E.reles.filter(function (r) { return states[r[0]] === true; })
+      .map(function (r) { return r[2]; });
+  }
+
+  // Lavagem que termina sem a pessoa ter tocado em parar foi concluída.
+  function fimDaLavagem(rodavaAntes, rodaAgora, parouPelaTela) {
+    if (!rodavaAntes || rodaAgora) return null;
+    return parouPelaTela ? 'interrompida' : 'concluida';
+  }
+
+  function etapasDaLinha(rapido) {
+    return rapido ? ETAPAS.filter(function (e) { return e !== 'Molho'; }) : ETAPAS.slice();
+  }
+
   var api = {
     E: E, NIVEIS: NIVEIS, commandUrl: commandUrl, parseEvent: parseEvent,
     estimateSeconds: estimateSeconds, formatDuration: formatDuration,
-    parseHms: parseHms, progressPct: progressPct, nivelAtual: nivelAtual
+    parseHms: parseHms, progressPct: progressPct, nivelAtual: nivelAtual,
+    horaTermino: horaTermino, relesLigados: relesLigados,
+    fimDaLavagem: fimDaLavagem, etapasDaLinha: etapasDaLinha
   };
 
   // ---------- Tela (só no navegador) ----------
 
-  var ROTULO_NIVEL = { Baixo: 'Baixo', Medio: 'Médio', Alto: 'Alto' };
-  var GOTAS = { Baixo: '💧', Medio: '💧💧', Alto: '💧💧💧' };
-  var ICONE_ESTADO = { Enchendo: '🚰', Misturando: '🔄', Molho: '🫧', Lavando: '🌀', Drenando: '⬇️', Desligado: '⏸️' };
+  var ROUPA = {
+    Baixo: { titulo: 'Pouca', sub: 'água baixa', icone: '💧' },
+    Medio: { titulo: 'Média', sub: 'água média', icone: '💧💧' },
+    Alto: { titulo: 'Muita', sub: 'água alta', icone: '💧💧💧' }
+  };
+  var ETAPA_TEXTO = {
+    Enchendo: { titulo: 'Enchendo de água', curto: 'Encher', icone: '🚰' },
+    Misturando: { titulo: 'Misturando o sabão', curto: 'Misturar', icone: '🔄' },
+    Molho: { titulo: 'Roupa de molho', curto: 'Molho', icone: '🫧' },
+    Lavando: { titulo: 'Lavando', curto: 'Lavar', icone: '🌀' },
+    Drenando: { titulo: 'Esvaziando a água', curto: 'Esvaziar', icone: '⬇️' }
+  };
 
   var CSS = [
-    ':root{--bg:#f4f6fa;--card:#fff;--txt:#1b2330;--sub:#5d6878;--pri:#1677ff;--pri-txt:#fff;',
-    '--borda:#dde3ec;--perigo:#d93636;--ok:#1f9d55;--raio:16px}',
-    '@media (prefers-color-scheme:dark){:root{--bg:#0f141b;--card:#18202b;--txt:#e8edf4;',
-    '--sub:#9aa6b6;--pri:#4c9bff;--borda:#2a3442;--perigo:#ff5c5c}}',
+    ':root{--bg:#f3f5f9;--card:#fff;--txt:#17202c;--sub:#566273;--pri:#1565d8;--pri-txt:#fff;',
+    '--sel:#e7f0fd;--borda:#d9e0ea;--perigo:#c62828;--perigo-bg:#fdecec;--ok:#1e8e4f;--ok-bg:#e6f5ec;',
+    '--alerta:#8a5a00;--alerta-bg:#fff4d6;--raio:18px}',
+    '@media (prefers-color-scheme:dark){:root{--bg:#0e131a;--card:#18202b;--txt:#eef2f7;--sub:#a3afbf;',
+    '--pri:#6aa8ff;--pri-txt:#0b1220;--sel:#1d2b40;--borda:#2b3646;--perigo:#ff6b6b;--perigo-bg:#3a1c1f;',
+    '--ok:#4cc584;--ok-bg:#16301f;--alerta:#ffd27a;--alerta-bg:#3a2e12}}',
     'body.tq-amigavel esp-app{display:none}',
     'body:not(.tq-amigavel) #tq{display:none}',
     'body.tq-amigavel{margin:0;background:var(--bg)}',
-    '#tq{font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt);',
-    'max-width:480px;margin:0 auto;padding:16px;box-sizing:border-box}',
+    '#tq{font:18px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt);',
+    'max-width:480px;margin:0 auto;padding:12px 16px 0;box-sizing:border-box;min-height:100vh;display:flex;flex-direction:column}',
     '#tq *{box-sizing:border-box}',
-    '#tq h1{font-size:22px;margin:4px 0 16px}',
-    '#tq .card{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);padding:16px;margin-bottom:14px}',
-    '#tq .rot{font-size:14px;color:var(--sub);margin:0 0 10px}',
-    '#tq button{font:inherit;color:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--borda);',
-    'background:var(--card);min-height:48px}',
-    '#tq button:disabled{opacity:.45;cursor:default}',
-    '#tq .niveis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}',
-    '#tq .niveis button{padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:2px}',
-    '#tq .niveis button.ativo{border:2px solid var(--pri);background:color-mix(in srgb,var(--pri) 12%,var(--card))}',
-    '#tq .ciclos{display:flex;align-items:center;justify-content:space-between}',
-    '#tq .ciclos button{width:56px;font-size:24px}',
-    '#tq .ciclos b{font-size:28px}',
-    '#tq .iniciar{width:100%;background:var(--pri);color:var(--pri-txt);border:0;padding:14px;',
-    'margin-bottom:10px;display:flex;flex-direction:column;align-items:center}',
-    '#tq .iniciar b{font-size:18px}#tq .iniciar span{font-size:14px;opacity:.9}',
-    '#tq .iniciar.sec{background:var(--card);color:var(--txt);border:1px solid var(--borda)}',
-    '#tq .agora{text-align:center}',
-    '#tq .agora .icone{font-size:56px;display:inline-block;animation:tq-gira 2.4s linear infinite}',
-    '#tq .agora .estado{font-size:28px;font-weight:700;margin:6px 0 2px}',
-    '#tq .agora .tempo{font-size:40px;font-variant-numeric:tabular-nums;margin:8px 0}',
-    '#tq .barra{height:10px;background:var(--borda);border-radius:6px;overflow:hidden}',
-    '#tq .barra i{display:block;height:100%;width:0;background:var(--ok);transition:width .8s}',
-    '#tq .parar{width:100%;background:var(--perigo);color:#fff;border:0;font-weight:700;font-size:18px;margin-top:14px}',
-    '#tq details summary{cursor:pointer;font-weight:600;min-height:32px}',
-    '#tq .campo{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0}',
-    '#tq .campo input{width:88px;min-height:40px;font:inherit;text-align:center;border-radius:10px;',
-    'border:1px solid var(--borda);background:var(--bg);color:var(--txt)}',
-    '#tq .reles{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
-    '#tq .reles button.ligado{background:var(--ok);color:#fff;border-color:var(--ok)}',
-    '#tq .aviso{font-size:13px;color:var(--sub)}',
-    '#tq .faixa{background:var(--perigo);color:#fff;padding:10px 14px;border-radius:12px;margin-bottom:12px;display:none}',
+    '#tq button{font:inherit;color:inherit;cursor:pointer;border-radius:14px;border:2px solid var(--borda);',
+    'background:var(--card);min-height:56px;-webkit-tap-highlight-color:transparent}',
+    '#tq button:disabled{opacity:.4;cursor:default}',
+    '#tq .topo{display:flex;align-items:center;gap:10px;margin-bottom:12px}',
+    '#tq .topo h1{font-size:22px;margin:0;flex:1}',
+    '#tq .status{display:block;font-size:14px;font-weight:400;color:var(--sub)}',
+    '#tq .status:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;',
+    'background:var(--ok);margin-right:6px;vertical-align:1px}',
+    '#tq.desconectado .status:before{background:var(--perigo)}',
+    '#tq .topo button{white-space:nowrap}',
+    '#tq .desligar{min-height:48px;padding:0 14px;border-color:var(--perigo);color:var(--perigo);font-size:16px;font-weight:600}',
+    '#tq .faixa,#tq .alerta{border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:16px}',
+    '#tq .faixa{background:var(--perigo);color:#fff;display:none}',
     '#tq.desconectado .faixa{display:block}',
-    '#tq .rodape{text-align:center;margin:18px 0 8px}',
-    '#tq .rodape a{color:var(--sub)}',
-    '#tq-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;',
-    'padding:10px 16px;border-radius:10px;font:14px system-ui,sans-serif;display:none;z-index:10}',
+    '#tq .alerta{background:var(--alerta-bg);color:var(--alerta);display:flex;align-items:center;gap:10px}',
+    '#tq .alerta span{flex:1}',
+    '#tq .alerta button{min-height:48px;padding:0 14px;border-color:currentColor;background:transparent;color:inherit;font-weight:600}',
+    '#tq .card{background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);padding:16px;margin-bottom:12px}',
+    '#tq h2{font-size:18px;margin:0 0 12px}',
+    '#tq .opcoes{display:grid;gap:10px}',
+    '#tq .opcoes.tres{grid-template-columns:repeat(3,1fr)}',
+    '#tq .opcoes.duas{grid-template-columns:1fr 1fr}',
+    '#tq .opcoes.cinco{grid-template-columns:repeat(5,1fr)}',
+    '#tq .opcao{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px 4px}',
+    '#tq .opcao b{font-size:19px}#tq .opcao small{font-size:14px;color:var(--sub)}',
+    '#tq .opcao[aria-pressed="true"]{border-color:var(--pri);background:var(--sel)}',
+    '#tq .opcoes.cinco .opcao b{font-size:22px}',
+    '#tq .acao{position:sticky;bottom:0;margin:auto -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));',
+    'background:linear-gradient(to top,var(--bg) 75%,transparent)}',
+    '#tq .acao button{width:100%;min-height:68px;border:0;font-weight:700;font-size:21px;display:flex;',
+    'flex-direction:column;align-items:center;justify-content:center}',
+    '#tq .acao small{font-size:15px;font-weight:400;opacity:.9}',
+    '#tq .comecar{background:var(--pri);color:var(--pri-txt)}',
+    '#tq .parar{background:var(--perigo);color:#fff}',
+    '#tq .agora{text-align:center}',
+    '#tq .agora .icone{font-size:64px;display:inline-block;animation:tq-pulsa 2s ease-in-out infinite}',
+    '#tq .agora .estado{font-size:28px;font-weight:700;margin:4px 0 2px}',
+    '#tq .agora .vez{font-size:16px;color:var(--sub)}',
+    '#tq .linha{display:flex;list-style:none;padding:0;margin:18px 0;gap:4px}',
+    '#tq .linha li{flex:1;font-size:13px;color:var(--sub);padding-top:10px;border-top:5px solid var(--borda)}',
+    '#tq .linha li.feito{border-color:var(--ok)}',
+    '#tq .linha li.atual{border-color:var(--pri);color:var(--txt);font-weight:700}',
+    '#tq .termina{font-size:16px;color:var(--sub);margin-top:6px}',
+    '#tq .termina b{display:block;font-size:40px;color:var(--txt);font-variant-numeric:tabular-nums}',
+    '#tq .barra{height:10px;background:var(--borda);border-radius:6px;overflow:hidden;margin-top:12px}',
+    '#tq .barra i{display:block;height:100%;width:0;background:var(--ok);transition:width .8s}',
+    '#tq .fim{text-align:center}',
+    '#tq .fim.concluida{background:var(--ok-bg);border-color:var(--ok)}',
+    '#tq .fim.interrompida{background:var(--alerta-bg);border-color:var(--alerta)}',
+    '#tq .fim .icone{font-size:48px}#tq .fim b{display:block;font-size:22px;margin:4px 0}',
+    '#tq .fim p{margin:0 0 12px;font-size:16px}#tq .fim button{min-width:140px}',
+    '#tq .voltar{min-height:48px;padding:0 14px;margin-right:4px}',
+    '#tq .campo{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:10px 0}',
+    '#tq .campo input{width:96px;min-height:52px;font:inherit;text-align:center;border-radius:12px;',
+    'border:2px solid var(--borda);background:var(--bg);color:var(--txt)}',
+    '#tq .nota{font-size:15px;color:var(--sub);margin:0 0 10px}',
+    '#tq .reles{display:grid;grid-template-columns:1fr 1fr;gap:10px}',
+    '#tq .reles button[aria-pressed="true"]{background:var(--ok);color:#fff;border-color:var(--ok)}',
+    '#tq .rodape{display:flex;justify-content:center;gap:24px;margin:8px 0 4px}',
+    '#tq .rodape button{border:0;background:transparent;min-height:48px;color:var(--sub);font-size:16px;text-decoration:underline}',
+    '#tq-folha{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}',
+    '#tq-folha.aberta{display:flex}',
+    '#tq-folha .caixa{background:var(--card);color:var(--txt);width:100%;max-width:480px;border-radius:22px 22px 0 0;',
+    'padding:22px 16px calc(16px + env(safe-area-inset-bottom));font:18px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}',
+    '#tq-folha h3{margin:0 0 6px;font-size:22px}#tq-folha p{margin:0 0 18px;color:var(--sub);font-size:16px}',
+    '#tq-folha button{display:block;width:100%;min-height:60px;border-radius:14px;font:inherit;font-weight:700;',
+    'margin-top:10px;cursor:pointer;border:2px solid var(--borda);background:var(--card);color:var(--txt)}',
+    '#tq-folha .sim{background:var(--perigo);border-color:var(--perigo);color:#fff}',
+    '#tq-toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#222;color:#fff;',
+    'padding:12px 16px;border-radius:12px;font:16px system-ui,sans-serif;display:none;z-index:30;max-width:90vw}',
     '#tq-voltar{position:fixed;right:12px;bottom:12px;z-index:10;padding:10px 14px;border-radius:12px;',
-    'border:0;background:#1677ff;color:#fff;font:15px system-ui,sans-serif;min-height:48px}',
+    'border:0;background:#1565d8;color:#fff;font:16px system-ui,sans-serif;min-height:48px}',
     'body.tq-amigavel #tq-voltar{display:none}',
-    '@keyframes tq-gira{to{transform:rotate(360deg)}}',
+    '@keyframes tq-pulsa{50%{transform:scale(1.08)}}',
     '@media (prefers-reduced-motion:reduce){#tq .agora .icone{animation:none}}'
   ].join('');
 
@@ -181,14 +253,28 @@
     document.head.appendChild(el('meta', { name: nome, content: conteudo }));
   }
 
+  // localStorage pode não existir (aba anônima); a tela funciona sem ele.
+  function lembrar(chave, valor) {
+    try {
+      if (valor === undefined) return window.localStorage.getItem(chave);
+      window.localStorage.setItem(chave, valor);
+    } catch (e) { return null; }
+    return valor;
+  }
+
   function iniciarTela() {
     var states = {};
     var conectado = false;
     var totalRodada = 0;
+    var tela = 'pronta';
+    var rapido = lembrar('tq-tipo') === 'rapida';
+    var rodavaAntes = null;
+    var parouPelaTela = false;
+    var fim = null;
     var ui = {};
 
-    meta('viewport', 'width=device-width, initial-scale=1');
-    meta('theme-color', '#1677ff');
+    meta('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+    meta('theme-color', '#1565d8');
     meta('apple-mobile-web-app-capable', 'yes');
     meta('apple-mobile-web-app-title', 'Tanquinho');
     document.title = 'Tanquinho';
@@ -199,7 +285,7 @@
       ui.toast.textContent = msg;
       ui.toast.style.display = 'block';
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(function () { ui.toast.style.display = 'none'; }, 3000);
+      toastTimer = setTimeout(function () { ui.toast.style.display = 'none'; }, 3500);
     }
 
     function enviar(nameId, action, params) {
@@ -210,6 +296,134 @@
       });
     }
 
+    // ---- folha de confirmação (parar / desligar tudo) ----
+    ui.folhaTitulo = el('h3');
+    ui.folhaTexto = el('p');
+    ui.folhaSim = el('button', { type: 'button', 'class': 'sim' });
+    var aoConfirmar = null;
+    function fecharFolha() { ui.folha.classList.remove('aberta'); aoConfirmar = null; }
+    ui.folhaSim.addEventListener('click', function () {
+      var f = aoConfirmar;
+      fecharFolha();
+      if (f) f();
+    });
+    ui.folha = el('div', { id: 'tq-folha', role: 'dialog', 'aria-modal': 'true', onclick: function (ev) {
+      if (ev.target === ui.folha) fecharFolha();
+    } }, [el('div', { 'class': 'caixa' }, [
+      ui.folhaTitulo, ui.folhaTexto, ui.folhaSim,
+      el('button', { type: 'button', text: 'Cancelar', onclick: fecharFolha })
+    ])]);
+    function confirmar(titulo, texto, botao, acao) {
+      ui.folhaTitulo.textContent = titulo;
+      ui.folhaTexto.textContent = texto;
+      ui.folhaSim.textContent = botao;
+      aoConfirmar = acao;
+      ui.folha.classList.add('aberta');
+      ui.folhaSim.focus();
+    }
+
+    function desligarTudo() {
+      if (states[E.rodando] === true) parouPelaTela = true;
+      enviar(E.parar, 'press');
+    }
+
+    function pedirDesligarTudo() {
+      confirmar('Desligar tudo agora?',
+        'A água, o motor e a bomba param na hora. Se estiver lavando, a lavagem é cancelada e a água fica no tanque.',
+        '⏻ Desligar tudo', desligarTudo);
+    }
+
+    function pedirParar() {
+      confirmar('Parar a lavagem?',
+        'A máquina para na hora. A água que estiver no tanque fica lá.',
+        'Sim, parar', desligarTudo);
+    }
+
+    function comecar() {
+      parouPelaTela = false;
+      fim = null;
+      lembrar('tq-tipo', rapido ? 'rapida' : 'normal');
+      enviar(rapido ? E.rapido : E.completo, 'press');
+    }
+
+    function irPara(nova) {
+      tela = nova;
+      render();
+      window.scrollTo(0, 0);
+    }
+
+    // ---- topo, avisos ----
+    ui.status = el('span', { 'class': 'status' });
+    ui.desligar = el('button', { type: 'button', 'class': 'desligar', text: '⏻ Desligar tudo', onclick: pedirDesligarTudo });
+    ui.alertaTexto = el('span');
+    ui.alerta = el('div', { 'class': 'alerta', role: 'status' }, [
+      ui.alertaTexto,
+      el('button', { type: 'button', text: 'Desligar', onclick: desligarTudo })
+    ]);
+    ui.fimIcone = el('div', { 'class': 'icone' });
+    ui.fimTitulo = el('b');
+    ui.fimTexto = el('p');
+    ui.fim = el('div', { 'class': 'card fim', role: 'status' }, [
+      ui.fimIcone, ui.fimTitulo, ui.fimTexto,
+      el('button', { type: 'button', text: 'OK', onclick: function () { fim = null; render(); } })
+    ]);
+
+    // ---- tela Pronta ----
+    function opcao(titulo, sub, aoTocar) {
+      return el('button', { type: 'button', 'class': 'opcao', 'aria-pressed': 'false', onclick: aoTocar },
+        [el('b', { text: titulo }), el('small', { text: sub })]);
+    }
+
+    ui.roupa = {};
+    var botoesRoupa = NIVEIS.map(function (n) {
+      var b = opcao(ROUPA[n].titulo, ROUPA[n].sub, function () { enviar(E.nivel, 'set', { option: n }); });
+      b.insertBefore(el('span', { 'aria-hidden': 'true', text: ROUPA[n].icone }), b.firstChild);
+      ui.roupa[n] = b;
+      return b;
+    });
+
+    ui.subNormal = el('small');
+    ui.subRapida = el('small');
+    ui.tipoNormal = el('button', { type: 'button', 'class': 'opcao', onclick: function () { rapido = false; render(); } },
+      [el('b', { text: 'Normal' }), ui.subNormal]);
+    ui.tipoRapida = el('button', { type: 'button', 'class': 'opcao', onclick: function () { rapido = true; render(); } },
+      [el('b', { text: 'Rápida' }), ui.subRapida]);
+
+    ui.vezes = [1, 2, 3, 4, 5].map(function (v) {
+      return el('button', { type: 'button', 'class': 'opcao', 'aria-label': v + (v === 1 ? ' vez' : ' vezes'),
+        onclick: function () { enviar(E.ciclos, 'set', { value: v }); } }, [el('b', { text: String(v) })]);
+    });
+
+    ui.comecarSub = el('small');
+    ui.comecar = el('button', { type: 'button', 'class': 'comecar', onclick: comecar },
+      [el('span', { text: '▶ Começar' }), ui.comecarSub]);
+
+    ui.pronta = el('div', {}, [
+      el('div', { 'class': 'card' }, [el('h2', { text: 'Quanta roupa?' }),
+        el('div', { 'class': 'opcoes tres' }, botoesRoupa)]),
+      el('div', { 'class': 'card' }, [el('h2', { text: 'Tipo de lavagem' }),
+        el('div', { 'class': 'opcoes duas' }, [ui.tipoNormal, ui.tipoRapida])]),
+      el('div', { 'class': 'card' }, [el('h2', { text: 'Quantas vezes lavar?' }),
+        el('div', { 'class': 'opcoes cinco' }, ui.vezes)])
+    ]);
+
+    // ---- tela Lavando ----
+    ui.icone = el('span', { 'class': 'icone', 'aria-hidden': 'true' });
+    ui.estado = el('div', { 'class': 'estado' });
+    ui.vez = el('div', { 'class': 'vez' });
+    ui.linha = el('ol', { 'class': 'linha', 'aria-label': 'Etapas' });
+    ui.terminaHora = el('b');
+    ui.terminaFalta = el('span');
+    ui.barra = el('i');
+    ui.lavando = el('div', { 'class': 'card agora', 'aria-live': 'polite' }, [
+      ui.icone, ui.estado, ui.vez, ui.linha,
+      el('div', { 'class': 'termina' }, [el('span', { text: 'Termina às' }), ui.terminaHora, ui.terminaFalta]),
+      el('div', { 'class': 'barra' }, [ui.barra])
+    ]);
+    ui.parar = el('button', { type: 'button', 'class': 'parar', text: '■ Parar lavagem', onclick: pedirParar });
+
+    // ---- tela Ajustes ----
+    ui.campos = [];
     function campoTempo(rotulo, nameId, max) {
       max = max || 30;
       var input = el('input', { type: 'number', min: '0.5', max: String(max), step: '0.5', inputmode: 'decimal' });
@@ -223,135 +437,167 @@
       return el('label', { 'class': 'campo' }, [el('span', { text: rotulo }), input]);
     }
 
-    ui.campos = [];
-    ui.toast = el('div', { id: 'tq-toast', role: 'status' });
-
-    ui.niveis = {};
-    var botoesNivel = NIVEIS.map(function (n) {
-      var b = el('button', { type: 'button', onclick: function () { enviar(E.nivel, 'set', { option: n }); } }, [
-        el('span', { text: GOTAS[n] }), el('span', { text: ROTULO_NIVEL[n] })
-      ]);
-      ui.niveis[n] = b;
-      return b;
-    });
-
-    ui.ciclosValor = el('b', { text: '1' });
-    function mudarCiclos(delta) {
-      var v = Math.min(5, Math.max(1, Math.round(num(states, E.ciclos, 1)) + delta));
-      enviar(E.ciclos, 'set', { value: v });
-    }
-
-    ui.estCompleta = el('span');
-    ui.estRapida = el('span');
-    ui.btnCompleta = el('button', { type: 'button', 'class': 'iniciar', onclick: function () { enviar(E.completo, 'press'); } },
-      [el('b', { text: 'Lavagem completa' }), ui.estCompleta]);
-    ui.btnRapida = el('button', { type: 'button', 'class': 'iniciar sec', onclick: function () { enviar(E.rapido, 'press'); } },
-      [el('b', { text: 'Lavagem rápida' }), ui.estRapida]);
-
-    ui.parado = el('div', {}, [
-      el('div', { 'class': 'card' }, [el('p', { 'class': 'rot', text: 'Nível da água' }),
-        el('div', { 'class': 'niveis' }, botoesNivel)]),
-      el('div', { 'class': 'card ciclos' }, [
-        el('span', { text: 'Quantos ciclos' }),
-        ui.menos = el('button', { type: 'button', 'aria-label': 'Menos ciclos', text: '−', onclick: function () { mudarCiclos(-1); } }),
-        ui.ciclosValor,
-        ui.mais = el('button', { type: 'button', 'aria-label': 'Mais ciclos', text: '+', onclick: function () { mudarCiclos(1); } })
-      ]),
-      ui.btnCompleta,
-      ui.btnRapida
-    ]);
-
-    ui.icone = el('span', { 'class': 'icone', text: '🌀' });
-    ui.estado = el('div', { 'class': 'estado' });
-    ui.etapa = el('div', { 'class': 'rot' });
-    ui.tempo = el('div', { 'class': 'tempo' });
-    ui.barra = el('i');
-    ui.rodando = el('div', { 'class': 'card agora' }, [
-      ui.icone, ui.estado, ui.etapa, ui.tempo,
-      el('div', { 'class': 'barra' }, [ui.barra]),
-      el('button', { type: 'button', 'class': 'parar', text: 'Parar', onclick: function () {
-        if (window.confirm('Parar a lavagem?')) enviar(E.parar, 'press');
-      } })
-    ]);
-
     ui.reles = E.reles.map(function (r) {
-      var b = el('button', { type: 'button', text: r[1], onclick: function () { enviar(r[0], 'toggle'); } });
+      var b = el('button', { type: 'button', 'aria-pressed': 'false', text: r[1], onclick: function () { enviar(r[0], 'toggle'); } });
       return [b, r[0]];
     });
+    ui.manualNota = el('p', { 'class': 'nota' });
 
-    var ajustes = el('details', { 'class': 'card' }, [
-      el('summary', { text: '⚙️ Ajustes' }),
-      el('p', { 'class': 'rot', text: 'Tempos de cada nível (minutos)' }),
-      // Máximo 10 min: a válvula de água desliga sozinha aos 10 min (limite_agua no firmware).
-      campoTempo('Encher no Baixo', E.encher.Baixo, 10),
-      campoTempo('Encher no Médio', E.encher.Medio, 10),
-      campoTempo('Encher no Alto', E.encher.Alto, 10),
-      campoTempo('Esvaziar no Baixo', E.drenar.Baixo),
-      campoTempo('Esvaziar no Médio', E.drenar.Medio),
-      campoTempo('Esvaziar no Alto', E.drenar.Alto),
-      el('p', { 'class': 'rot', text: 'Outros tempos (minutos)' }),
-      campoTempo('Misturar', E.misturar),
-      campoTempo('Molho', E.molho),
-      campoTempo('Lavar', E.lavar),
-      el('p', { 'class': 'rot', text: 'Uso manual' }),
-      el('p', { 'class': 'aviso', text: 'Liga e desliga cada parte na hora. Use só se souber o que está fazendo.' }),
-      el('div', { 'class': 'reles' }, ui.reles.map(function (r) { return r[0]; }))
+    ui.ajustes = el('div', {}, [
+      el('div', { 'class': 'card' }, [
+        el('h2', { text: 'Tempo para encher (minutos)' }),
+        // Máximo 10 min: a válvula de água desliga sozinha aos 10 min (limite_agua no firmware).
+        campoTempo('Pouca roupa', E.encher.Baixo, 10),
+        campoTempo('Média', E.encher.Medio, 10),
+        campoTempo('Muita roupa', E.encher.Alto, 10)
+      ]),
+      el('div', { 'class': 'card' }, [
+        el('h2', { text: 'Tempo para esvaziar (minutos)' }),
+        campoTempo('Pouca roupa', E.drenar.Baixo),
+        campoTempo('Média', E.drenar.Medio),
+        campoTempo('Muita roupa', E.drenar.Alto)
+      ]),
+      el('div', { 'class': 'card' }, [
+        el('h2', { text: 'Outras etapas (minutos)' }),
+        campoTempo('Misturar o sabão', E.misturar),
+        campoTempo('Molho', E.molho),
+        campoTempo('Lavar', E.lavar)
+      ]),
+      el('div', { 'class': 'card' }, [
+        el('h2', { text: 'Modo manual' }),
+        ui.manualNota,
+        el('div', { 'class': 'reles' }, ui.reles.map(function (r) { return r[0]; }))
+      ])
     ]);
 
+    // ---- montagem ----
     var carregouPadrao = false;
-    ui.raiz = el('div', { id: 'tq' }, [
-      el('div', { 'class': 'faixa', text: 'Sem conexão com o tanquinho. Tentando de novo…' }),
-      el('h1', { text: '🧺 Tanquinho' }),
-      ui.parado, ui.rodando, ajustes,
-      el('div', { 'class': 'rodape' }, [el('a', { href: '#', text: 'Avançado', onclick: function (ev) {
-        ev.preventDefault();
+    ui.nome = el('span');
+    ui.titulo = el('h1', {}, [ui.nome, ui.status]);
+    ui.voltar = el('button', { type: 'button', 'class': 'voltar', text: '← Voltar', onclick: function () { irPara('pronta'); } });
+    ui.rodape = el('div', { 'class': 'rodape' }, [
+      el('button', { type: 'button', text: '⚙️ Ajustes', onclick: function () { irPara('ajustes'); } }),
+      el('button', { type: 'button', text: 'Avançado', onclick: function () {
         if (!carregouPadrao) {
           carregouPadrao = true;
           document.body.appendChild(el('script', { src: 'https://oi.esphome.io/v2/www.js' }));
         }
         document.body.classList.remove('tq-amigavel');
-      } })])
+      } })
     ]);
+    ui.acao = el('div', { 'class': 'acao' }, [ui.comecar, ui.parar]);
+
+    ui.raiz = el('div', { id: 'tq' }, [
+      el('div', { 'class': 'topo' }, [ui.voltar, ui.titulo, ui.desligar]),
+      el('div', { 'class': 'faixa', role: 'alert', text: 'Sem conexão com o tanquinho. Tentando de novo…' }),
+      ui.alerta, ui.fim,
+      ui.pronta, ui.lavando, ui.ajustes,
+      ui.rodape, ui.acao
+    ]);
+    ui.toast = el('div', { id: 'tq-toast', role: 'status' });
 
     document.body.classList.add('tq-amigavel');
     document.body.insertBefore(ui.raiz, document.body.firstChild);
+    document.body.appendChild(ui.folha);
     document.body.appendChild(ui.toast);
     document.body.appendChild(el('button', { id: 'tq-voltar', type: 'button', text: '🧺 Tela simples', onclick: function () {
       document.body.classList.add('tq-amigavel');
     } }));
 
+    function mostrar(n, sim) { n.style.display = sim ? '' : 'none'; }
+
     function render() {
       var rodando = states[E.rodando] === true;
       var nivel = nivelAtual(states);
+      var ciclos = Math.round(num(states, E.ciclos, 1));
+      var ligados = relesLigados(states);
+      var vista = tela === 'ajustes' ? 'ajustes' : (rodando ? 'lavando' : 'pronta');
+
+      var acabou = typeof states[E.rodando] === 'boolean' && rodavaAntes !== null
+        ? fimDaLavagem(rodavaAntes, rodando, parouPelaTela) : null;
+      if (acabou) {
+        fim = acabou;
+        if (acabou === 'concluida' && navigator.vibrate) navigator.vibrate([300, 150, 300]);
+      }
+      if (typeof states[E.rodando] === 'boolean') rodavaAntes = rodando;
+      if (rodando) fim = null;
 
       ui.raiz.classList.toggle('desconectado', !conectado);
-      ui.parado.style.display = rodando ? 'none' : '';
-      ui.rodando.style.display = rodando ? '' : 'none';
-      ui.btnCompleta.disabled = ui.btnRapida.disabled = !conectado;
-      ui.menos.disabled = ui.mais.disabled = !conectado;
-      NIVEIS.forEach(function (n) { ui.niveis[n].disabled = !conectado; });
-      ui.campos.forEach(function (c) { c[0].disabled = !conectado; });
-      ui.reles.forEach(function (r) { r[0].disabled = !conectado || rodando; });
+      ui.status.textContent = !conectado ? 'Sem conexão' : (rodando ? 'Lavando' : 'Pronto');
+      ui.nome.textContent = vista === 'ajustes' ? 'Ajustes' : '🧺 Tanquinho';
 
-      NIVEIS.forEach(function (n) { ui.niveis[n].classList.toggle('ativo', n === nivel); });
-      ui.ciclosValor.textContent = String(Math.round(num(states, E.ciclos, 1)));
-      ui.estCompleta.textContent = '≈ ' + formatDuration(estimateSeconds(states, false));
-      ui.estRapida.textContent = '≈ ' + formatDuration(estimateSeconds(states, true));
+      mostrar(ui.voltar, vista === 'ajustes');
+      mostrar(ui.pronta, vista === 'pronta');
+      mostrar(ui.lavando, vista === 'lavando');
+      mostrar(ui.ajustes, vista === 'ajustes');
+      mostrar(ui.rodape, vista === 'pronta');
+      mostrar(ui.acao, vista !== 'ajustes');
+      mostrar(ui.comecar, vista === 'pronta');
+      mostrar(ui.parar, vista === 'lavando');
+      mostrar(ui.fim, !!fim && vista === 'pronta');
+      mostrar(ui.alerta, !rodando && ligados.length > 0);
+
+      ui.alertaTexto.textContent = 'Ligado no modo manual: ' + ligados.join(', ') + '.';
+      if (fim === 'concluida') {
+        ui.fim.className = 'card fim concluida';
+        ui.fimIcone.textContent = '✅';
+        ui.fimTitulo.textContent = 'Pronto! Pode tirar a roupa';
+        ui.fimTexto.textContent = 'A lavagem terminou.';
+      } else if (fim === 'interrompida') {
+        ui.fim.className = 'card fim interrompida';
+        ui.fimIcone.textContent = '⏹️';
+        ui.fimTitulo.textContent = 'Lavagem interrompida';
+        ui.fimTexto.textContent = 'Se ficou água no tanque, use ⚙️ Ajustes → Modo manual → Bomba para esvaziar.';
+      }
+
+      ui.desligar.disabled = !conectado;
+      ui.comecar.disabled = !conectado;
+      NIVEIS.forEach(function (n) {
+        ui.roupa[n].disabled = !conectado;
+        ui.roupa[n].setAttribute('aria-pressed', String(n === nivel));
+      });
+      ui.tipoNormal.setAttribute('aria-pressed', String(!rapido));
+      ui.tipoRapida.setAttribute('aria-pressed', String(rapido));
+      ui.vezes.forEach(function (b, i) {
+        b.disabled = !conectado;
+        b.setAttribute('aria-pressed', String(i + 1 === ciclos));
+      });
+      ui.campos.forEach(function (c) { c[0].disabled = !conectado; });
+      ui.reles.forEach(function (r) {
+        r[0].disabled = !conectado || rodando;
+        r[0].setAttribute('aria-pressed', String(states[r[1]] === true));
+      });
+      ui.manualNota.textContent = rodando
+        ? 'Indisponível durante a lavagem.'
+        : 'Liga e desliga cada parte na hora. A água desliga sozinha depois de 10 minutos.';
+
+      var segNormal = estimateSeconds(states, false);
+      var segRapida = estimateSeconds(states, true);
+      ui.subNormal.textContent = 'com molho · ' + formatDuration(segNormal);
+      ui.subRapida.textContent = 'sem molho · ' + formatDuration(segRapida);
+      ui.comecarSub.textContent = 'termina às ' + horaTermino(Date.now(), rapido ? segRapida : segNormal);
 
       var restante = parseHms(states[E.restante]);
       if (!rodando) totalRodada = 0;
       else if (restante > totalRodada) totalRodada = restante;
       var estado = states[E.estado] || '';
-      ui.estado.textContent = estado;
-      ui.icone.textContent = ICONE_ESTADO[estado] || '🌀';
-      ui.etapa.textContent = states[E.etapa] || '';
-      ui.tempo.textContent = states[E.restante] || '';
+      var texto = ETAPA_TEXTO[estado] || { titulo: estado, icone: '🌀' };
+      ui.icone.textContent = texto.icone;
+      ui.estado.textContent = texto.titulo;
+      ui.vez.textContent = ciclos > 1 ? (states[E.etapa] || '').replace('Ciclo', 'Lavagem') : '';
+      var etapas = etapasDaLinha(lembrar('tq-tipo') === 'rapida');
+      var atual = etapas.indexOf(estado);
+      ui.linha.textContent = '';
+      etapas.forEach(function (e, i) {
+        ui.linha.appendChild(el('li', { 'class': i < atual ? 'feito' : (i === atual ? 'atual' : ''), text: ETAPA_TEXTO[e].curto }));
+      });
+      ui.terminaHora.textContent = restante ? horaTermino(Date.now(), restante) : '--:--';
+      ui.terminaFalta.textContent = restante ? 'faltam ' + formatDuration(restante) : '';
       ui.barra.style.width = progressPct(restante, totalRodada) + '%';
 
       ui.campos.forEach(function (c) {
         if (document.activeElement !== c[0] && typeof states[c[1]] === 'number') c[0].value = String(states[c[1]]);
       });
-      ui.reles.forEach(function (r) { r[0].classList.toggle('ligado', states[r[1]] === true); });
     }
 
     var agendado = false;
@@ -371,6 +617,8 @@
       states[e.key] = e.value;
       agendar();
     });
+    // A hora de término anda com o relógio mesmo sem eventos novos.
+    setInterval(agendar, 30000);
 
     render();
   }

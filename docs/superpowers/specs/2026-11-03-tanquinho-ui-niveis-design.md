@@ -89,21 +89,37 @@ Um único arquivo JS, sem dependências externas (funciona sem internet). Ao
 carregar, esconde a interface padrão do ESPHome e monta a tela amigável. Um
 link "Avançado" no rodapé alterna de volta para a interface padrão.
 
-**Parado**
-- Seletor de nível: 3 botões grandes (Baixo / Médio / Alto), o atual destacado.
-- Ciclos: `−` / `+` de 1 a 5.
-- Botões "Lavagem completa" e "Lavagem rápida", cada um com o tempo total
-  estimado calculado no navegador a partir dos tempos atuais.
+Pensada para quem não é de tecnologia: uma ação principal por tela, palavras
+do dia a dia, estado sempre visível, nunca iniciar sem querer, desligar sempre
+ao alcance.
 
-**Rodando** (quando `Em andamento` = ON)
-- Estado atual grande com ícone animado, `Etapa` ("Ciclo 2 de 3"), Tempo
-  Restante e barra de progresso (restante / total no início).
-- Botão vermelho "Parar" com confirmação → `PARAR TUDO`.
-- Nível e botões de iniciar ficam ocultos.
+**Topo (todas as telas)**: nome + status ("Pronto", "Lavando", "Sem conexão") e
+o botão **⏻ Desligar tudo** (contorno vermelho). Ele abre uma folha de
+confirmação ("Desligar tudo agora?") e aciona `PARAR TUDO`. Se algum relé está
+ligado no modo manual sem lavagem rodando, aparece um aviso amarelo
+("Ligado no modo manual: a água.") com o botão "Desligar".
 
-**⚙️ Ajustes** (recolhido)
-- Os 6 tempos de nível, Misturando, Molho, Lavando.
-- Relés manuais (Água, Motor, Bomba, Auxiliar) com aviso "uso manual"; ficam desativados enquanto um ciclo roda.
+**Pronta** (sem lavagem): escolher primeiro, confirmar depois.
+- "Quanta roupa?": Pouca / Média / Muita (= nível Baixo / Medio / Alto).
+- "Tipo de lavagem": Normal ("com molho · 28 min") / Rápida ("sem molho ·
+  15 min"). Só seleciona; a escolha fica no navegador (`localStorage`).
+- "Quantas vezes lavar?": botões 1 a 5 (= `Ciclos`).
+- Botão fixo embaixo **▶ Começar · termina às HH:MM**.
+
+**Lavando** (`Em andamento` = ON): etapa em linguagem simples com ícone
+("Enchendo de água", "Misturando o sabão", "Roupa de molho", "Lavando",
+"Esvaziando a água"), linha do tempo das etapas (sem Molho na rápida),
+"Lavagem N de M" quando há mais de uma, "Termina às HH:MM", tempo que falta e
+barra de progresso. Botão fixo **■ Parar lavagem** com folha de confirmação
+avisando que a água fica no tanque.
+
+**Fim**: quando a lavagem termina sozinha aparece "Pronto! Pode tirar a roupa"
+e o celular vibra; se foi parada pela tela, "Lavagem interrompida" com a dica
+de esvaziar pela Bomba no modo manual.
+
+**⚙️ Ajustes** (tela própria, com "← Voltar"): tempos de encher (máx. 10 min)
+e esvaziar por quantidade de roupa, Misturar/Molho/Lavar, e Modo manual com
+os relés (desativados durante a lavagem).
 
 **Conexão**
 - Lê `/events` com `EventSource`; estado em memória indexado pelo `id` da
@@ -112,7 +128,7 @@ link "Avançado" no rodapé alterna de volta para a interface padrão.
 - Sem conexão: faixa "Sem conexão com o tanquinho", controles desativados;
   `EventSource` reconecta sozinho.
 
-**Visual**: mobile first, botões ≥ 48 px, textos em português, tema
+**Visual**: mobile first, letra base 18 px, botões ≥ 56 px (≥ 48 px no topo), textos em português, tema
 claro/escuro por `prefers-color-scheme`. O script injeta `meta viewport`,
 `theme-color` e as metas `apple-mobile-web-app-*` (o índice gerado não tem),
 para a página caber no celular e funcionar bem em "Adicionar à tela inicial".

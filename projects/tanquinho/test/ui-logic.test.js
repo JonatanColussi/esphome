@@ -88,5 +88,37 @@ teste('progressPct', function () {
   assert.strictEqual(ui.progressPct(10, 0), 0);
 });
 
+teste('horaTermino soma a duração e formata HH:MM no fuso local', function () {
+  var tres = new Date(2026, 10, 3, 15, 0, 0).getTime();
+  assert.strictEqual(ui.horaTermino(tres, 40 * 60), '15:40');
+  assert.strictEqual(ui.horaTermino(tres, 65 * 60), '16:05');
+  assert.strictEqual(ui.horaTermino(new Date(2026, 10, 3, 23, 50, 0).getTime(), 20 * 60), '00:10');
+  // 29 s arredonda para baixo, 30 s para cima
+  assert.strictEqual(ui.horaTermino(tres, 29), '15:00');
+  assert.strictEqual(ui.horaTermino(tres, 30), '15:01');
+});
+
+teste('relesLigados lista os relés ligados pelo nome amigável', function () {
+  var s = {};
+  assert.deepStrictEqual(ui.relesLigados(s), []);
+  s['switch/Rele Entrada Agua'] = true;
+  s['switch/Rele Motor'] = false;
+  s['switch/Auxiliar'] = true;
+  assert.deepStrictEqual(ui.relesLigados(s), ['a água', 'o auxiliar']);
+});
+
+teste('fimDaLavagem: concluída, interrompida ou nada', function () {
+  assert.strictEqual(ui.fimDaLavagem(true, false, false), 'concluida');
+  assert.strictEqual(ui.fimDaLavagem(true, false, true), 'interrompida');
+  assert.strictEqual(ui.fimDaLavagem(true, true, false), null);
+  assert.strictEqual(ui.fimDaLavagem(false, false, false), null);
+  assert.strictEqual(ui.fimDaLavagem(false, true, false), null);
+});
+
+teste('etapasDaLinha: rápida não tem molho', function () {
+  assert.deepStrictEqual(ui.etapasDaLinha(false), ['Enchendo', 'Misturando', 'Molho', 'Lavando', 'Drenando']);
+  assert.deepStrictEqual(ui.etapasDaLinha(true), ['Enchendo', 'Misturando', 'Lavando', 'Drenando']);
+});
+
 if (falhas) { console.log('\n' + falhas + ' falha(s)'); process.exit(1); }
 console.log('\ntodos passaram');

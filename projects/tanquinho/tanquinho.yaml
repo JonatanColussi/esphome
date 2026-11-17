@@ -227,7 +227,7 @@ switch:
   - platform: gpio
     name: "Rele Entrada Agua"
     pin:
-      number: GPIO26
+      number: GPIO12
       inverted: true
     id: rele_agua
     icon: mdi:water-plus
@@ -264,7 +264,7 @@ switch:
   - platform: gpio
     name: "Auxiliar"
     pin:
-      number: GPIO12
+      number: GPIO26
       inverted: true
     id: rele_auxiliar
     restore_mode: ALWAYS_OFF

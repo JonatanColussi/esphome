@@ -1,5 +1,5 @@
 esphome:
-  name: esphome-web-807b1c
+  name: tanquinho
   friendly_name: tanquinho-v2
   on_boot:
     priority: -100

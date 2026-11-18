@@ -4,6 +4,14 @@ esphome:
   on_boot:
     priority: -100
     then:
+      # Se o ESP reiniciou no meio de uma lavagem, conta como cortada.
+      - lambda: |-
+          if (id(h_rodando)) {
+            id(h_cortadas) += 1;
+            id(h_cortada_etapa) = id(h_etapa);
+            id(h_cortada_ciclo) = id(h_ciclo);
+            id(h_rodando) = false;
+          }
       - script.execute: estado_desligado
 
 esp32:
@@ -50,7 +58,48 @@ web_server:
   # Sem gravação de firmware pelo navegador (/update não pede senha); só a OTA com senha.
   ota: false
 
+preferences:
+  flash_write_interval: 10s
+
 globals:
+  # Histórico de lavagens: sobrevive a reinícios (aparece no Avançado).
+  - id: h_iniciadas
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_concluidas
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_paradas
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_cortadas
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_rodando
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+  # Etapa atual: 1 Enchendo, 2 Misturando, 3 Molho, 4 Lavando, 5 Drenando.
+  - id: h_etapa
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_ciclo
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_cortada_etapa
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: h_cortada_ciclo
+    type: int
+    restore_value: yes
+    initial_value: '0'
   - id: ciclo_ativo
     type: bool
     restore_value: no
@@ -306,6 +355,11 @@ button:
     name: "PARAR TUDO"
     icon: mdi:stop-circle
     on_press:
+      - lambda: |-
+          if (id(ciclo_ativo)) {
+            id(h_paradas) += 1;
+            id(h_rodando) = false;
+          }
       - script.execute: estado_desligado
 
 binary_sensor:
@@ -316,6 +370,23 @@ binary_sensor:
     lambda: 'return id(ciclo_ativo);'
 
 text_sensor:
+  - platform: template
+    name: "Historico de Lavagens"
+    entity_category: diagnostic
+    icon: mdi:history
+    update_interval: 15s
+    lambda: |-
+      static const char *nomes[] = {"inicio", "Enchendo", "Misturando", "Molho", "Lavando", "Drenando"};
+      std::string s = "Iniciadas " + std::to_string(id(h_iniciadas)) +
+                      " | Concluidas " + std::to_string(id(h_concluidas)) +
+                      " | Paradas " + std::to_string(id(h_paradas)) +
+                      " | Cortadas " + std::to_string(id(h_cortadas));
+      if (id(h_cortadas) > 0) {
+        int e = id(h_cortada_etapa);
+        if (e < 0 || e > 5) e = 0;
+        s += " (ultima em " + std::string(nomes[e]) + ", ciclo " + std::to_string(id(h_cortada_ciclo)) + ")";
+      }
+      return s;
   - platform: debug
     reset_reason:
       name: "Motivo do Reinicio"
@@ -388,6 +459,9 @@ script:
       - text_sensor.template.publish:
           id: tanquinho_estado
           state: "Enchendo"
+      - lambda: |-
+          id(h_etapa) = 1;
+          id(h_ciclo) = id(ciclo_atual);
 
   - id: estado_misturando
     then:
@@ -397,6 +471,9 @@ script:
       - text_sensor.template.publish:
           id: tanquinho_estado
           state: "Misturando"
+      - lambda: |-
+          id(h_etapa) = 2;
+          id(h_ciclo) = id(ciclo_atual);
 
   - id: estado_molho
     then:
@@ -406,6 +483,9 @@ script:
       - text_sensor.template.publish:
           id: tanquinho_estado
           state: "Molho"
+      - lambda: |-
+          id(h_etapa) = 3;
+          id(h_ciclo) = id(ciclo_atual);
 
   - id: estado_lavando
     then:
@@ -415,6 +495,9 @@ script:
       - text_sensor.template.publish:
           id: tanquinho_estado
           state: "Lavando"
+      - lambda: |-
+          id(h_etapa) = 4;
+          id(h_ciclo) = id(ciclo_atual);
 
   - id: estado_drenando
     then:
@@ -424,6 +507,9 @@ script:
       - text_sensor.template.publish:
           id: tanquinho_estado
           state: "Drenando"
+      - lambda: |-
+          id(h_etapa) = 5;
+          id(h_ciclo) = id(ciclo_atual);
 
   # Congela os tempos do nível ativo para o ciclo que vai começar.
   - id: preparar_ciclo
@@ -450,6 +536,10 @@ script:
           id(total_time) = (por_ciclo_ms / 1000) * id(ciclos_total);
           id(start_time) = millis();
           id(ciclo_ativo) = true;
+          id(h_iniciadas) += 1;
+          id(h_rodando) = true;
+          id(h_etapa) = 0;
+          id(h_ciclo) = 0;
 
   - id: executar_ciclos
     then:
@@ -474,6 +564,9 @@ script:
             - delay: !lambda 'return id(t_lavar_ms);'
             - script.execute: estado_drenando
             - delay: !lambda 'return id(t_drenar_ms);'
+      - lambda: |-
+          id(h_concluidas) += 1;
+          id(h_rodando) = false;
       - script.execute: estado_desligado
 
   - id: ciclo_completo

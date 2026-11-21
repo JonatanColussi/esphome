@@ -8,7 +8,7 @@ import { createLocalPreferences } from './ui/preferences';
 import { createFrameScheduler } from './ui/scheduler';
 import { SIMPLE_MODE_CLASS, STYLES } from './ui/styles';
 
-/** ESPHome's default interface, loaded only when the person taps "Avançado". */
+/** ESPHome's default interface, loaded only when the person taps the Advanced button. */
 const ADVANCED_UI_URL = 'https://oi.esphome.io/v2/www.js';
 /** The finish time moves with the clock even without new events. */
 const CLOCK_REFRESH_MS = 30_000;

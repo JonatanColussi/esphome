@@ -1,6 +1,6 @@
 import type { Actions, CommandSender, View } from './actions';
 import { createConfirmSheet } from './components/confirm-sheet';
-import type { ClickHandler } from './dom';
+import type { Callback } from './dom';
 import { h } from './dom';
 import type { Preferences } from './preferences';
 import { createActionBar } from './screens/action-bar';
@@ -29,15 +29,15 @@ export interface App {
   element: HTMLElement;
   /** Fixed-position layers that must be appended to <body> next to the app. */
   overlays: HTMLElement[];
-  render: ClickHandler;
+  render: Callback;
 }
 
 export interface AppEnvironment {
   commands: CommandSender;
   now: Clock;
-  openAdvanced: ClickHandler;
+  openAdvanced: Callback;
   preferences: Preferences;
-  scrollToTop: ClickHandler;
+  scrollToTop: Callback;
   store: StateStore;
   vibrate: Vibrate;
 }

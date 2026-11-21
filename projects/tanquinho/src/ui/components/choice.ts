@@ -1,4 +1,4 @@
-import type { ClickHandler } from '../dom';
+import type { Callback } from '../dom';
 import { h, setPressed } from '../dom';
 
 export interface Choice {
@@ -10,7 +10,7 @@ export interface Choice {
 export interface ChoiceOptions {
   ariaLabel?: string;
   icon?: string;
-  onSelect: ClickHandler;
+  onSelect: Callback;
   subtitle?: string;
   title: string;
 }

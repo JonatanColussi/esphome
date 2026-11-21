@@ -1,16 +1,16 @@
-export type ClickHandler = (this: void) => void;
+export type Callback = (this: void) => void;
 
 export interface ElementOptions {
   attrs?: Readonly<Record<string, string>>;
   className?: string;
-  onClick?: ClickHandler;
+  onClick?: Callback;
   text?: string;
 }
 
 export function button(
   text: string,
   className: string | undefined,
-  onClick: () => void,
+  onClick: Callback,
 ): HTMLButtonElement {
   return h('button', { attrs: { type: 'button' }, className, onClick, text });
 }

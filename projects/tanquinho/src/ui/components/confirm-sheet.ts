@@ -1,11 +1,11 @@
 import { TEXT } from '../../copy';
-import type { ClickHandler } from '../dom';
+import type { Callback } from '../dom';
 import { button, h } from '../dom';
 
 export interface ConfirmOptions {
   confirmLabel: string;
   message: string;
-  onConfirm: ClickHandler;
+  onConfirm: Callback;
   title: string;
 }
 

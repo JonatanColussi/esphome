@@ -1,0 +1,8 @@
+dist/
+node_modules/
+.esphome/
+package-lock.json
+*.yaml
+*.md
+tanquinho-ui.js
+test/ui-logic.test.js

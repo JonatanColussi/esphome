@@ -1,0 +1,11 @@
+{
+  "extends": "@colussi/tsconfig/tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "sourceMap": false,
+    "types": ["jest", "node"]
+  },
+  "include": ["src", "test", "dev"]
+}

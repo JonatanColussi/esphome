@@ -21,35 +21,44 @@ concurrency:
 env:
   ESPHOME_VERSION: "2026.4.1"
 
+defaults:
+  run:
+    working-directory: projects/tanquinho
+
 jobs:
-  tela:
-    name: Testes da tela
+  check:
+    name: Types, lint, format and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - name: Lógica da tela
-        run: node projects/tanquinho/test/ui-logic.test.js
+          node-version-file: projects/tanquinho/.nvmrc
+          cache: npm
+          cache-dependency-path: projects/tanquinho/package-lock.json
+      - run: npm ci
+      - run: npm run check
 
   firmware:
-    name: Firmware (config e compile)
+    name: Firmware build (UI bundle + ESPHome compile)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: projects/tanquinho
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: projects/tanquinho/.nvmrc
+          cache: npm
+          cache-dependency-path: projects/tanquinho/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: .github/workflows/tanquinho.yml
-      - name: Instalar ESPHome
+      - name: Install ESPHome
         run: pip install "esphome==${ESPHOME_VERSION}"
-      # Segredos de mentira, gerados a cada execução: nenhuma senha real vai para o GitHub.
-      - name: Segredos de teste
+      - run: npm ci
+      # Throwaway secrets generated on every run: no real password ever reaches GitHub.
+      - name: Test secrets
         run: |
           cat > secrets.yaml <<EOF
           wifi_ssid: "ci"
@@ -58,14 +67,17 @@ jobs:
           ota_password: "$(openssl rand -hex 16)"
           ap_password: "$(openssl rand -hex 8)"
           EOF
-      - name: Validar configuração
-        run: esphome config tanquinho.yaml > /dev/null
-      - name: Cache do PlatformIO
+      - name: PlatformIO cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.platformio
             projects/tanquinho/.esphome/platformio
           key: pio-${{ runner.os }}-${{ env.ESPHOME_VERSION }}
-      - name: Compilar
-        run: esphome compile tanquinho.yaml
+      - name: Build UI and compile firmware
+        run: npm run build
+      - name: Bundle size
+        run: |
+          size=$(wc -c < dist/ui.js)
+          echo "dist/ui.js: ${size} bytes"
+          test "$size" -le 40960

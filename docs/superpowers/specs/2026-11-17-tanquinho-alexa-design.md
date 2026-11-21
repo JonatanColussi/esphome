@@ -36,11 +36,11 @@ A tela local (`tanquinho.local`) continua igual e independente da internet.
 
 | Aparelho | Tipo | Comportamento |
 |---|---|---|
-| Tanquinho | Switch | Ligar = botão `Iniciar`. Desligar = `PARAR TUDO`. O estado espelha `Em andamento`, inclusive quando a lavagem começa ou para pela tela. |
+| Tanquinho | Switch | Ligar = botão `Start`. Desligar = `Stop All`. O estado espelha `Running`, inclusive quando a lavagem começa ou para pela tela. |
 | Tanquinho terminou | Contact Sensor | "Abre" quando a lavagem termina sozinha e "fecha" 5 s depois. A pessoa cria no app Alexa a rotina "quando abrir, anunciar 'A roupa está pronta'". |
 
-Ligar com uma lavagem em andamento não faz nada (trava `ciclo_ativo` já
-existente). Lavagem parada por `PARAR TUDO` não gera aviso.
+Ligar com uma lavagem em andamento não faz nada (trava `cycle_active` já
+existente). Lavagem parada por `Stop All` não gera aviso.
 
 ## Firmware
 
@@ -73,37 +73,37 @@ Regras:
 
 ### Mudanças no `tanquinho.yaml`
 
-- `select` template **Tipo**: `Normal` / `Rapida`, inicial `Normal`,
+- `select` template **Wash Type**: `Normal` / `Quick`, inicial `Normal`,
   `optimistic`, `restore_value: true`.
-- `button` **Iniciar**: executa `ciclo_completo` ou `ciclo_rapido` conforme o
-  `Tipo`, com a mesma trava `!ciclo_ativo`. Os botões `Iniciar Ciclo Completo`
-  e `Iniciar Ciclo Rapido` continuam.
-- `sinric.on_turn_on` → `button.press: Iniciar`; `on_turn_off` →
-  `button.press: PARAR TUDO`.
-- `binary_sensor` `Em andamento` ganha `on_state` → `sinric.publicar_ligado`.
-- `executar_ciclos`: ao terminar todos os ciclos (fim natural), chama
-  `sinric.avisar_fim` antes de `estado_desligado`. `PARAR TUDO` não passa por
+- `button` **Start**: executa `full_cycle` ou `quick_cycle` conforme o
+  `Wash Type`, com a mesma trava `!cycle_active`. Os botões `Start Full Cycle`
+  e `Start Quick Cycle` continuam.
+- `sinric.on_turn_on` → `button.press: Start`; `on_turn_off` →
+  `button.press: Stop All`.
+- `binary_sensor` `Running` ganha `on_state` → `sinric.publicar_ligado`.
+- `run_cycles`: ao terminar todos os ciclos (fim natural), chama
+  `sinric.avisar_fim` antes de `state_off`. `Stop All` não passa por
   esse ponto, então não avisa.
 - `secrets.yaml` ganha `sinric_app_key`, `sinric_app_secret`,
   `sinric_switch_id`, `sinric_contact_id`; `secrets.example.yaml` ganha os
   mesmos com valores de exemplo.
 
-## Tela (`tanquinho-ui.js`)
+## Tela (`src/`)
 
-- "Tipo de lavagem" lê e grava `select/Tipo` (`set?option=Normal|Rapida`);
-  sai o `localStorage` `tq-tipo`.
-- "▶ Começar" aperta `button/Iniciar`.
-- Estimativa, "termina às" e linha do tempo usam o `Tipo` vindo do ESP; se ele
+- "Tipo de lavagem" lê e grava `select/Wash Type` (`set?option=Normal|Quick`);
+  sai o `localStorage` `tq-wash-type`.
+- "▶ Começar" aperta `button/Start`.
+- Estimativa, "termina às" e linha do tempo usam o `Wash Type` vindo do ESP; se ele
   ainda não chegou, assume `Normal`.
-- `dev/mock_server.py` ganha `select/Tipo` e `button/Iniciar`.
+- `dev/mock-server.ts` ganha `select/Wash Type` e `button/Start`.
 
 ## Testes
 
 1. **Prova de compilação primeiro**: firmware atual + componente `sinric`
    mínimo (conecta, sem ações). Se a biblioteca não compilar com o ESPHome
    2026.4.1, parar e trazer alternativas antes de seguir.
-2. Testes da tela (`node test/ui-logic.test.js`): os 15 atuais + novos para o
-   Tipo (estimativa e linha do tempo a partir de `select/Tipo`).
+2. Testes da tela (`npm run check`): os 15 atuais + novos para o
+   Tipo (estimativa e linha do tempo a partir de `select/Wash Type`).
 3. Tela no navegador com o mock: escolher Tipo, Começar, Parar.
 4. `esphome config` e `esphome compile` sem erros.
 5. Gravação OTA **somente com OK explícito**.

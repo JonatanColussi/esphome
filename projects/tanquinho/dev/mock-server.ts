@@ -15,6 +15,8 @@ const UI_BUNDLE = path.resolve(__dirname, '../dist/ui.js');
 const SIMULATED_SECONDS_PER_TICK = 30;
 const TICKS_PER_STAGE = 4;
 const STAGES = ['Filling', 'Mixing', 'Soaking', 'Washing', 'Draining'];
+/** The firmware skips soaking in a quick cycle. */
+const QUICK_STAGES = ['Filling', 'Mixing', 'Washing', 'Draining'];
 const RELAYS = ['switch/Water Valve', 'switch/Motor', 'switch/Drain Pump', 'switch/Auxiliary'];
 const INDEX_HTML =
   '<!DOCTYPE html><html><head><meta charset=UTF-8><link rel=icon href=data:></head>' +
@@ -40,7 +42,7 @@ const states = new Map<string, Value>([
   ...RELAYS.map((relay): [string, Value] => [relay, false]),
 ]);
 const clients = new Set<ServerResponse>();
-const wash = { remainingSeconds: 0, ticks: 0 };
+const wash = { quick: false, remainingSeconds: 0, ticks: 0 };
 
 function eventPayload(key: string): string {
   const separator = key.indexOf('/');
@@ -93,6 +95,7 @@ function startWash(quick: boolean): void {
     (minutes('number/Mix Time (min)') + minutes('number/Wash Time (min)')) * factor +
     (quick ? 0 : minutes('number/Soak Time (min)'));
 
+  wash.quick = quick;
   wash.remainingSeconds = Math.round(perCycle * 60) * cycles;
   wash.ticks = 0;
   publish('binary_sensor/Running', true);
@@ -120,9 +123,10 @@ function tick(): void {
   publish('text_sensor/Time Remaining', hms(wash.remainingSeconds));
 
   if (wash.ticks % TICKS_PER_STAGE === 0) {
-    const current = STAGES.indexOf(String(states.get('text_sensor/Stage')));
+    const stages = wash.quick ? QUICK_STAGES : STAGES;
+    const current = stages.indexOf(String(states.get('text_sensor/Stage')));
 
-    publish('text_sensor/Stage', STAGES[(current + 1) % STAGES.length]);
+    publish('text_sensor/Stage', stages[(current + 1) % stages.length]);
   }
 
   if (wash.remainingSeconds === 0) {
@@ -157,6 +161,17 @@ const BUTTONS: Readonly<Record<string, () => void>> = {
   'Stop All': stopAll,
 };
 
+/** Unknown button names are a 404, like the firmware. */
+function pressButton(name: string): boolean {
+  if (!Object.prototype.hasOwnProperty.call(BUTTONS, name)) {
+    return false;
+  }
+
+  BUTTONS[name]?.();
+
+  return true;
+}
+
 function applyCommand(
   domain: string,
   name: string,
@@ -166,9 +181,7 @@ function applyCommand(
   const key = `${domain}/${name}`;
 
   if (domain === 'button' && action === 'press') {
-    BUTTONS[name]?.();
-
-    return true;
+    return pressButton(name);
   }
 
   if (!states.has(key)) {

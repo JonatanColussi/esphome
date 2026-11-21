@@ -4,6 +4,3 @@ node_modules/
 package-lock.json
 *.yaml
 *.md
-# The two old UI files are removed in a later task.
-tanquinho-ui.js
-test/ui-logic.test.js

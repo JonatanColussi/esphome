@@ -15,6 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest",
+    "build": "npm run typecheck && npm run build:ui && esphome compile tanquinho.yaml",
+    "flash": "npm run build && esphome upload tanquinho.yaml --device ${TANQUINHO_HOST:-tanquinho.local}",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
   },
   "devDependencies": {

@@ -1,18 +1,18 @@
 esphome:
   name: tanquinho
-  friendly_name: tanquinho-v2
+  friendly_name: Tanquinho
   on_boot:
     priority: -100
     then:
-      # Se o ESP reiniciou no meio de uma lavagem, conta como cortada.
+      # A reboot in the middle of a wash counts as an interrupted wash.
       - lambda: |-
-          if (id(h_rodando)) {
-            id(h_cortadas) += 1;
-            id(h_cortada_etapa) = id(h_etapa);
-            id(h_cortada_ciclo) = id(h_ciclo);
-            id(h_rodando) = false;
+          if (id(h_running)) {
+            id(h_interrupted) += 1;
+            id(h_interrupted_stage) = id(h_stage);
+            id(h_interrupted_cycle) = id(h_cycle);
+            id(h_running) = false;
           }
-      - script.execute: estado_desligado
+      - script.execute: state_off
 
 esp32:
   board: esp32dev
@@ -22,6 +22,7 @@ esp32:
 logger:
 
 api:
+  # No Home Assistant here: never reboot for lack of API clients.
   reboot_timeout: 0s
   encryption:
     key: !secret api_key
@@ -32,75 +33,76 @@ ota:
 
 wifi:
   reboot_timeout: 0s
-  # Sem cochilo do rádio entre pacotes: responde mais rápido com sinal fraco.
+  # Keep the radio awake between packets: much lower latency on a weak signal.
   power_save_mode: none
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   ap:
-    ssid: "tanquinho-v2 Fallback"
+    ssid: "Tanquinho Fallback"
     password: !secret ap_password
 
 captive_portal:
 
-# Diagnóstico (aparece no Avançado): motivo do último reinício e sinal do Wi-Fi.
+# Diagnostics shown in the Advanced UI: last reset reason and Wi-Fi signal.
 debug:
   update_interval: 60s
 
 sensor:
   - platform: wifi_signal
-    name: "Sinal Wi-Fi"
+    name: "Wi-Fi Signal"
     update_interval: 60s
     entity_category: diagnostic
 
 web_server:
-  js_include: tanquinho-ui.js
+  # Phone UI built from src/ by `npm run build:ui`; served as /0.js.
+  js_include: dist/ui.js
   js_url: ""
-  # Sem gravação de firmware pelo navegador (/update não pede senha); só a OTA com senha.
+  # No firmware upload from the browser (/update has no password); only password-protected OTA.
   ota: false
 
 preferences:
   flash_write_interval: 10s
 
 globals:
-  # Histórico de lavagens: sobrevive a reinícios (aparece no Avançado).
-  - id: h_iniciadas
+  # Wash history: survives reboots (shown in the Advanced UI).
+  - id: h_started
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_concluidas
+  - id: h_completed
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_paradas
+  - id: h_stopped
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_cortadas
+  - id: h_interrupted
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_rodando
+  - id: h_running
     type: bool
     restore_value: yes
     initial_value: 'false'
-  # Etapa atual: 1 Enchendo, 2 Misturando, 3 Molho, 4 Lavando, 5 Drenando.
-  - id: h_etapa
+  # Current stage: 1 Filling, 2 Mixing, 3 Soaking, 4 Washing, 5 Draining.
+  - id: h_stage
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_ciclo
+  - id: h_cycle
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_cortada_etapa
+  - id: h_interrupted_stage
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: h_cortada_ciclo
+  - id: h_interrupted_cycle
     type: int
     restore_value: yes
     initial_value: '0'
-  - id: ciclo_ativo
+  - id: cycle_active
     type: bool
     restore_value: no
     initial_value: 'false'
@@ -112,53 +114,54 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'
-  - id: t_encher_ms
+  - id: fill_ms
     type: int
     restore_value: no
     initial_value: '0'
-  - id: t_misturar_ms
+  - id: mix_ms
     type: int
     restore_value: no
     initial_value: '0'
-  - id: t_molho_ms
+  - id: soak_ms
     type: int
     restore_value: no
     initial_value: '0'
-  - id: t_lavar_ms
+  - id: wash_ms
     type: int
     restore_value: no
     initial_value: '0'
-  - id: t_drenar_ms
+  - id: drain_ms
     type: int
     restore_value: no
     initial_value: '0'
-  - id: ciclo_atual
+  - id: current_cycle
     type: int
     restore_value: no
     initial_value: '0'
-  - id: ciclos_total
+  - id: total_cycles
     type: int
     restore_value: no
     initial_value: '0'
 
 select:
   - platform: template
-    name: "Nivel"
-    id: nivel
+    name: "Water Level"
+    id: water_level
     icon: mdi:waves-arrow-up
     options:
-      - "Baixo"
-      - "Medio"
-      - "Alto"
-    initial_option: "Medio"
+      - "Low"
+      - "Medium"
+      - "High"
+    initial_option: "Medium"
     optimistic: true
     restore_value: true
 
 number:
+  # Fill times stop at 10 min, the same limit as water_valve_limit.
   - platform: template
     optimistic: true
-    name: "Enchendo Baixo (min)"
-    id: enchendo_baixo
+    name: "Fill Low (min)"
+    id: fill_low
     min_value: 0.5
     max_value: 10
     step: 0.5
@@ -170,8 +173,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Enchendo Medio (min)"
-    id: enchendo_medio
+    name: "Fill Medium (min)"
+    id: fill_medium
     min_value: 0.5
     max_value: 10
     step: 0.5
@@ -183,8 +186,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Enchendo Alto (min)"
-    id: enchendo_alto
+    name: "Fill High (min)"
+    id: fill_high
     min_value: 0.5
     max_value: 10
     step: 0.5
@@ -196,8 +199,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Drenando Baixo (min)"
-    id: drenando_baixo
+    name: "Drain Low (min)"
+    id: drain_low
     min_value: 0.5
     max_value: 30
     step: 0.5
@@ -209,8 +212,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Drenando Medio (min)"
-    id: drenando_medio
+    name: "Drain Medium (min)"
+    id: drain_medium
     min_value: 0.5
     max_value: 30
     step: 0.5
@@ -222,8 +225,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Drenando Alto (min)"
-    id: drenando_alto
+    name: "Drain High (min)"
+    id: drain_high
     min_value: 0.5
     max_value: 30
     step: 0.5
@@ -235,8 +238,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Tempo Misturando (min)"
-    id: tempo_misturando
+    name: "Mix Time (min)"
+    id: mix_time
     min_value: 0.5
     max_value: 30
     step: 0.5
@@ -248,8 +251,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Tempo Molho (min)"
-    id: tempo_molho
+    name: "Soak Time (min)"
+    id: soak_time
     min_value: 0.5
     max_value: 30
     step: 0.5
@@ -261,8 +264,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Tempo Lavando (min)"
-    id: tempo_lavando
+    name: "Wash Time (min)"
+    id: wash_time
     min_value: 0.5
     max_value: 30
     step: 0.5
@@ -274,8 +277,8 @@ number:
 
   - platform: template
     optimistic: true
-    name: "Ciclos"
-    id: qtd_ciclos
+    name: "Cycles"
+    id: cycle_count
     min_value: 1
     max_value: 5
     step: 1
@@ -284,153 +287,156 @@ number:
     initial_value: 1
     restore_value: true
 
+# Relay module is active-low. Interlocks: water and pump never together; motor and pump never together.
 switch:
   - platform: gpio
-    name: "Rele Entrada Agua"
+    name: "Water Valve"
     pin:
       number: GPIO12
       inverted: true
-    id: rele_agua
+    id: water_valve
     icon: mdi:water-plus
     restore_mode: ALWAYS_OFF
     on_turn_on:
-      - switch.turn_off: rele_drenagem
-      - script.execute: limite_agua
+      - switch.turn_off: drain_pump
+      - script.execute: water_valve_limit
     on_turn_off:
-      - script.stop: limite_agua
+      - script.stop: water_valve_limit
 
   - platform: gpio
-    name: "Rele Motor"
+    name: "Motor"
     pin:
       number: GPIO27
       inverted: true
-    id: rele_motor
+    id: motor
     icon: mdi:engine
     restore_mode: ALWAYS_OFF
     on_turn_on:
-      - switch.turn_off: rele_drenagem
+      - switch.turn_off: drain_pump
 
   - platform: gpio
-    name: "Rele Bomba Drenagem"
+    name: "Drain Pump"
     pin:
       number: GPIO14
       inverted: true
-    id: rele_drenagem
+    id: drain_pump
     icon: mdi:water-minus
     restore_mode: ALWAYS_OFF
     on_turn_on:
-      - switch.turn_off: rele_agua
-      - switch.turn_off: rele_motor
+      - switch.turn_off: water_valve
+      - switch.turn_off: motor
 
   - platform: gpio
-    name: "Auxiliar"
+    name: "Auxiliary"
     pin:
       number: GPIO26
       inverted: true
-    id: rele_auxiliar
+    id: auxiliary
     restore_mode: ALWAYS_OFF
 
 button:
   - platform: template
-    name: "Iniciar Ciclo Completo"
+    name: "Start Full Cycle"
     icon: mdi:play-circle
     on_press:
       - if:
           condition:
-            lambda: 'return !id(ciclo_ativo);'
+            lambda: 'return !id(cycle_active);'
           then:
-            - script.execute: ciclo_completo
+            - script.execute: full_cycle
 
   - platform: template
-    name: "Iniciar Ciclo Rapido"
+    name: "Start Quick Cycle"
     icon: mdi:play-speed
     on_press:
       - if:
           condition:
-            lambda: 'return !id(ciclo_ativo);'
+            lambda: 'return !id(cycle_active);'
           then:
-            - script.execute: ciclo_rapido
+            - script.execute: quick_cycle
 
   - platform: template
-    name: "PARAR TUDO"
+    name: "Stop All"
     icon: mdi:stop-circle
     on_press:
       - lambda: |-
-          if (id(ciclo_ativo)) {
-            id(h_paradas) += 1;
-            id(h_rodando) = false;
+          if (id(cycle_active)) {
+            id(h_stopped) += 1;
+            id(h_running) = false;
           }
-      - script.execute: estado_desligado
+      - script.execute: state_off
 
 binary_sensor:
   - platform: template
-    name: "Em andamento"
-    id: em_andamento
+    name: "Running"
+    id: running_sensor
     icon: mdi:washing-machine
-    lambda: 'return id(ciclo_ativo);'
+    lambda: 'return id(cycle_active);'
 
 text_sensor:
   - platform: template
-    name: "Historico de Lavagens"
+    name: "Wash History"
     entity_category: diagnostic
     icon: mdi:history
     update_interval: 15s
     lambda: |-
-      static const char *nomes[] = {"inicio", "Enchendo", "Misturando", "Molho", "Lavando", "Drenando"};
-      std::string s = "Iniciadas " + std::to_string(id(h_iniciadas)) +
-                      " | Concluidas " + std::to_string(id(h_concluidas)) +
-                      " | Paradas " + std::to_string(id(h_paradas)) +
-                      " | Cortadas " + std::to_string(id(h_cortadas));
-      if (id(h_cortadas) > 0) {
-        int e = id(h_cortada_etapa);
-        if (e < 0 || e > 5) e = 0;
-        s += " (ultima em " + std::string(nomes[e]) + ", ciclo " + std::to_string(id(h_cortada_ciclo)) + ")";
+      static const char *stage_names[] = {"start", "Filling", "Mixing", "Soaking", "Washing", "Draining"};
+      std::string text = "Started " + std::to_string(id(h_started)) +
+                         " | Completed " + std::to_string(id(h_completed)) +
+                         " | Stopped " + std::to_string(id(h_stopped)) +
+                         " | Interrupted " + std::to_string(id(h_interrupted));
+      if (id(h_interrupted) > 0) {
+        int stage = id(h_interrupted_stage);
+        if (stage < 0 || stage > 5) stage = 0;
+        text += " (last at " + std::string(stage_names[stage]) + ", cycle " +
+                std::to_string(id(h_interrupted_cycle)) + ")";
       }
-      return s;
+      return text;
   - platform: debug
     reset_reason:
-      name: "Motivo do Reinicio"
+      name: "Reset Reason"
       entity_category: diagnostic
   - platform: template
-    name: "Estado"
-    id: tanquinho_estado
+    name: "Stage"
+    id: stage_sensor
     icon: mdi:information
-    lambda: 'return {"Desligado"};'
+    lambda: 'return {"Off"};'
     update_interval: never
 
   - platform: template
-    name: "Tempo Restante"
-    id: tanquinho_tempo_restante
+    name: "Time Remaining"
+    id: time_remaining
     icon: mdi:timer
     lambda: 'return {"00:00:00"};'
     update_interval: never
 
+  # "current/total" while a wash runs, empty otherwise.
   - platform: template
-    name: "Etapa"
-    id: tanquinho_etapa
+    name: "Cycle Progress"
+    id: cycle_progress
     icon: mdi:counter
     lambda: 'return {""};'
     update_interval: never
 
 script:
-  # Válvula de água esquecida ligada fecha sozinha após 10 min.
-  - id: limite_agua
+  # A water valve left on closes by itself after 10 min.
+  - id: water_valve_limit
     mode: restart
     then:
       - delay: 10min
-      - switch.turn_off: rele_agua
+      - switch.turn_off: water_valve
 
-  - id: estado_desligado
+  - id: state_off
     then:
-      - script.stop: ciclo_completo
-      - script.stop: ciclo_rapido
-      - script.stop: executar_ciclos
-      - switch.turn_off: rele_agua
-      - switch.turn_off: rele_motor
-      - switch.turn_off: rele_drenagem
-      - switch.turn_off: rele_auxiliar
+      - script.stop: full_cycle
+      - script.stop: quick_cycle
+      - script.stop: run_cycles
+      - switch.turn_off: water_valve
+      - switch.turn_off: motor
+      - switch.turn_off: drain_pump
+      - switch.turn_off: auxiliary
       - globals.set:
-          id: ciclo_ativo
+          id: cycle_active
           value: 'false'
       - globals.set:
           id: start_time
@@ -439,155 +445,154 @@ script:
           id: total_time
           value: '0'
       - globals.set:
-          id: ciclo_atual
+          id: current_cycle
           value: '0'
       - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Desligado"
+          id: stage_sensor
+          state: "Off"
       - text_sensor.template.publish:
-          id: tanquinho_tempo_restante
+          id: time_remaining
           state: "00:00:00"
       - text_sensor.template.publish:
-          id: tanquinho_etapa
+          id: cycle_progress
           state: ""
 
-  - id: estado_enchendo
+  - id: state_filling
     then:
-      - switch.turn_off: rele_motor
-      - switch.turn_off: rele_drenagem
-      - switch.turn_on: rele_agua
+      - switch.turn_off: motor
+      - switch.turn_off: drain_pump
+      - switch.turn_on: water_valve
       - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Enchendo"
+          id: stage_sensor
+          state: "Filling"
       - lambda: |-
-          id(h_etapa) = 1;
-          id(h_ciclo) = id(ciclo_atual);
+          id(h_stage) = 1;
+          id(h_cycle) = id(current_cycle);
 
-  - id: estado_misturando
+  - id: state_mixing
     then:
-      - switch.turn_off: rele_agua
-      - switch.turn_off: rele_drenagem
-      - switch.turn_on: rele_motor
+      - switch.turn_off: water_valve
+      - switch.turn_off: drain_pump
+      - switch.turn_on: motor
       - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Misturando"
+          id: stage_sensor
+          state: "Mixing"
       - lambda: |-
-          id(h_etapa) = 2;
-          id(h_ciclo) = id(ciclo_atual);
+          id(h_stage) = 2;
+          id(h_cycle) = id(current_cycle);
 
-  - id: estado_molho
+  - id: state_soaking
     then:
-      - switch.turn_off: rele_agua
-      - switch.turn_off: rele_motor
-      - switch.turn_off: rele_drenagem
+      - switch.turn_off: water_valve
+      - switch.turn_off: motor
+      - switch.turn_off: drain_pump
       - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Molho"
+          id: stage_sensor
+          state: "Soaking"
       - lambda: |-
-          id(h_etapa) = 3;
-          id(h_ciclo) = id(ciclo_atual);
+          id(h_stage) = 3;
+          id(h_cycle) = id(current_cycle);
 
-  - id: estado_lavando
+  - id: state_washing
     then:
-      - switch.turn_off: rele_agua
-      - switch.turn_off: rele_drenagem
-      - switch.turn_on: rele_motor
+      - switch.turn_off: water_valve
+      - switch.turn_off: drain_pump
+      - switch.turn_on: motor
       - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Lavando"
+          id: stage_sensor
+          state: "Washing"
       - lambda: |-
-          id(h_etapa) = 4;
-          id(h_ciclo) = id(ciclo_atual);
+          id(h_stage) = 4;
+          id(h_cycle) = id(current_cycle);
 
-  - id: estado_drenando
+  - id: state_draining
     then:
-      - switch.turn_off: rele_agua
-      - switch.turn_off: rele_motor
-      - switch.turn_on: rele_drenagem
+      - switch.turn_off: water_valve
+      - switch.turn_off: motor
+      - switch.turn_on: drain_pump
       - text_sensor.template.publish:
-          id: tanquinho_estado
-          state: "Drenando"
+          id: stage_sensor
+          state: "Draining"
       - lambda: |-
-          id(h_etapa) = 5;
-          id(h_ciclo) = id(ciclo_atual);
+          id(h_stage) = 5;
+          id(h_cycle) = id(current_cycle);
 
-  # Congela os tempos do nível ativo para o ciclo que vai começar.
-  - id: preparar_ciclo
+  # Freezes the active level's times for the wash about to start.
+  - id: prepare_cycle
     parameters:
-      rapido: bool
+      quick: bool
     then:
       - lambda: |-
-          auto idx = id(nivel).active_index();
-          size_t n = idx.has_value() ? *idx : 1;
-          float encher[] = {id(enchendo_baixo).state, id(enchendo_medio).state, id(enchendo_alto).state};
-          float drenar[] = {id(drenando_baixo).state, id(drenando_medio).state, id(drenando_alto).state};
-          float fator = rapido ? 0.5f : 1.0f;
+          auto index = id(water_level).active_index();
+          size_t level = index.has_value() ? *index : 1;
+          float fill_minutes[] = {id(fill_low).state, id(fill_medium).state, id(fill_high).state};
+          float drain_minutes[] = {id(drain_low).state, id(drain_medium).state, id(drain_high).state};
+          float factor = quick ? 0.5f : 1.0f;
 
-          id(t_encher_ms) = (int) (encher[n] * 60000);
-          id(t_drenar_ms) = (int) (drenar[n] * 60000);
-          id(t_misturar_ms) = (int) (id(tempo_misturando).state * 60000 * fator);
-          id(t_lavar_ms) = (int) (id(tempo_lavando).state * 60000 * fator);
-          id(t_molho_ms) = rapido ? 0 : (int) (id(tempo_molho).state * 60000);
+          id(fill_ms) = (int) (fill_minutes[level] * 60000);
+          id(drain_ms) = (int) (drain_minutes[level] * 60000);
+          id(mix_ms) = (int) (id(mix_time).state * 60000 * factor);
+          id(wash_ms) = (int) (id(wash_time).state * 60000 * factor);
+          id(soak_ms) = quick ? 0 : (int) (id(soak_time).state * 60000);
 
-          id(ciclos_total) = (int) id(qtd_ciclos).state;
-          id(ciclo_atual) = 0;
-          int por_ciclo_ms = id(t_encher_ms) + id(t_misturar_ms) + id(t_molho_ms) +
-                             id(t_lavar_ms) + id(t_drenar_ms);
-          id(total_time) = (por_ciclo_ms / 1000) * id(ciclos_total);
+          id(total_cycles) = (int) id(cycle_count).state;
+          id(current_cycle) = 0;
+          int cycle_ms = id(fill_ms) + id(mix_ms) + id(soak_ms) + id(wash_ms) + id(drain_ms);
+          id(total_time) = (cycle_ms / 1000) * id(total_cycles);
           id(start_time) = millis();
-          id(ciclo_ativo) = true;
-          id(h_iniciadas) += 1;
-          id(h_rodando) = true;
-          id(h_etapa) = 0;
-          id(h_ciclo) = 0;
+          id(cycle_active) = true;
+          id(h_started) += 1;
+          id(h_running) = true;
+          id(h_stage) = 0;
+          id(h_cycle) = 0;
 
-  - id: executar_ciclos
+  - id: run_cycles
     then:
       - repeat:
-          count: !lambda 'return id(ciclos_total);'
+          count: !lambda 'return id(total_cycles);'
           then:
             - lambda: |-
-                id(ciclo_atual) += 1;
-                id(tanquinho_etapa).publish_state(
-                  "Ciclo " + std::to_string(id(ciclo_atual)) + " de " + std::to_string(id(ciclos_total)));
-            - script.execute: estado_enchendo
-            - delay: !lambda 'return id(t_encher_ms);'
-            - script.execute: estado_misturando
-            - delay: !lambda 'return id(t_misturar_ms);'
+                id(current_cycle) += 1;
+                id(cycle_progress).publish_state(
+                  std::to_string(id(current_cycle)) + "/" + std::to_string(id(total_cycles)));
+            - script.execute: state_filling
+            - delay: !lambda 'return id(fill_ms);'
+            - script.execute: state_mixing
+            - delay: !lambda 'return id(mix_ms);'
             - if:
                 condition:
-                  lambda: 'return id(t_molho_ms) > 0;'
+                  lambda: 'return id(soak_ms) > 0;'
                 then:
-                  - script.execute: estado_molho
-                  - delay: !lambda 'return id(t_molho_ms);'
-            - script.execute: estado_lavando
-            - delay: !lambda 'return id(t_lavar_ms);'
-            - script.execute: estado_drenando
-            - delay: !lambda 'return id(t_drenar_ms);'
+                  - script.execute: state_soaking
+                  - delay: !lambda 'return id(soak_ms);'
+            - script.execute: state_washing
+            - delay: !lambda 'return id(wash_ms);'
+            - script.execute: state_draining
+            - delay: !lambda 'return id(drain_ms);'
       - lambda: |-
-          id(h_concluidas) += 1;
-          id(h_rodando) = false;
-      - script.execute: estado_desligado
+          id(h_completed) += 1;
+          id(h_running) = false;
+      - script.execute: state_off
 
-  - id: ciclo_completo
+  - id: full_cycle
     then:
       - script.execute:
-          id: preparar_ciclo
-          rapido: false
-      - script.execute: executar_ciclos
+          id: prepare_cycle
+          quick: false
+      - script.execute: run_cycles
 
-  - id: ciclo_rapido
+  - id: quick_cycle
     then:
       - script.execute:
-          id: preparar_ciclo
-          rapido: true
-      - script.execute: executar_ciclos
+          id: prepare_cycle
+          quick: true
+      - script.execute: run_cycles
 
 interval:
   - interval: 1s
     then:
       - lambda: |-
-          if (id(ciclo_ativo)) {
+          if (id(cycle_active)) {
             int elapsed = (millis() - id(start_time)) / 1000;
             int remaining = id(total_time) - elapsed;
             if (remaining < 0) remaining = 0;
@@ -596,10 +601,10 @@ interval:
             int minutes = (remaining % 3600) / 60;
             int seconds = remaining % 60;
 
-            std::string tempo =
+            std::string text =
               std::to_string(hours) + ":" +
               (minutes < 10 ? "0" : "") + std::to_string(minutes) + ":" +
               (seconds < 10 ? "0" : "") + std::to_string(seconds);
 
-            id(tanquinho_tempo_restante).publish_state(tempo);
+            id(time_remaining).publish_state(text);
           }

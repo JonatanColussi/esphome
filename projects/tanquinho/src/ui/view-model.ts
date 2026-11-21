@@ -113,13 +113,15 @@ function buildTimeline(washType: WashType, stage: Stage | null): TimelineStep[] 
 }
 
 function readMinuteSettings(states: EntityStates): Record<string, number | undefined> {
-  return Object.fromEntries(
-    MINUTE_SETTINGS.map(key => {
-      const value = states[key];
+  const settings: Record<string, number | undefined> = {};
 
-      return [key, typeof value === 'number' ? value : undefined];
-    }),
-  );
+  for (const key of MINUTE_SETTINGS) {
+    const value = states[key];
+
+    settings[key] = typeof value === 'number' && !Number.isNaN(value) ? value : undefined;
+  }
+
+  return settings;
 }
 
 export function buildViewModel(input: ViewInput): ViewModel {

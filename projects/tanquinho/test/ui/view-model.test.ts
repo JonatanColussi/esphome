@@ -98,4 +98,13 @@ describe('buildViewModel', () => {
     expect(model.minuteSettings[Entity.fillMinutes.Low]).toBe(2.5);
     expect(model.minuteSettings[Entity.washMinutes]).toBe(15);
   });
+
+  it('maps non-numeric and NaN settings to undefined', () => {
+    const model = buildViewModel(
+      input({ ...buildStates(), [Entity.washMinutes]: NaN, [Entity.mixMinutes]: 'x' }),
+    );
+
+    expect(model.minuteSettings[Entity.washMinutes]).toBeUndefined();
+    expect(model.minuteSettings[Entity.mixMinutes]).toBeUndefined();
+  });
 });

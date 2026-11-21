@@ -40,6 +40,7 @@ export const MINUTE_SETTINGS: readonly string[] = [
   Entity.washMinutes,
 ];
 
+/** Panel order of the manual-mode relays. */
 export const RELAYS = [
   'switch/Water Valve',
   'switch/Motor',

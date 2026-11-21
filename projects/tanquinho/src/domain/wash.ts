@@ -5,6 +5,7 @@ export interface CycleProgress {
   current: number;
   total: number;
 }
+
 export type WashOutcome = 'completed' | 'interrupted';
 
 export type WashType = 'normal' | 'quick';

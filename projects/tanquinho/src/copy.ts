@@ -1,3 +1,4 @@
+/** Every text the person reads lives here, in Portuguese. Code elsewhere stays in English. */
 import type { RelayKey, Stage, WaterLevel } from './domain/entities';
 import { formatDuration } from './domain/time';
 import type { CycleProgress, WashOutcome, WashType } from './domain/wash';
@@ -8,7 +9,6 @@ export const LOAD_COPY: Readonly<Record<WaterLevel, LoadCopy>> = {
   Medium: { icon: '💧💧', subtitle: 'água média', title: 'Média' },
 };
 
-/** Every text the person reads lives here, in Portuguese. Code elsewhere stays in English. */
 export interface LoadCopy {
   icon: string;
   subtitle: string;

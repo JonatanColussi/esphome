@@ -3934,7 +3934,12 @@ B=http://192.168.2.121
 curl -s "$B/binary_sensor/Em%20andamento"
 for e in "select/Nivel" "number/Ciclos" "number/Enchendo%20Baixo%20(min)" "number/Enchendo%20Medio%20(min)" "number/Enchendo%20Alto%20(min)" "number/Drenando%20Baixo%20(min)" "number/Drenando%20Medio%20(min)" "number/Drenando%20Alto%20(min)" "number/Tempo%20Misturando%20(min)" "number/Tempo%20Molho%20(min)" "number/Tempo%20Lavando%20(min)"; do curl -s "$B/$e"; echo; done | tee /private/tmp/claude-501/-Users-jonatancolussi-esphome/8c86656a-664c-4417-9ef7-06732cf46039/scratchpad/old-settings.json
 ```
-Expected: `"state":"OFF"` for the running sensor and 11 JSON lines with values.
+Also read the four relays and require all OFF before flashing:
+
+```bash
+for e in "switch/Rele%20Entrada%20Agua" "switch/Rele%20Motor" "switch/Rele%20Bomba%20Drenagem" "switch/Auxiliar"; do curl -s "$B/$e"; echo; done
+```
+Expected: `"state":"OFF"` for the running sensor, 11 JSON lines with values, and `"state":"OFF"` for all four relays. Do not flash otherwise.
 
 - [ ] **Step 2: Flash**
 
@@ -3950,5 +3955,5 @@ Mapping: `Nivel` Baixo/Medio/Alto → `Water Level` Low/Medium/High; `Ciclos` �
 - `curl -s "$B/select/Water%20Level"` and each new number return the old values.
 - `curl -s "$B/text_sensor/Stage"` returns `"Off"`; `curl -s "$B/0.js" | head -c 200` returns minified JS.
 - Open `http://tanquinho.local/` (or the IP) in the browser pane at phone width: ready screen in Portuguese, level and cycles match the old values, no console errors.
-- Tell the user: wash history restarted at zero; the Advanced UI now shows English names; the wash type (Normal/Rápida) resets to Normal once on each phone.
+- Tell the user: wash history restarted at zero; the Advanced UI now shows English names; the wash type (Normal/Rápida) resets to Normal once on each phone; the fallback hotspot is now "Tanquinho Fallback".
 ```

@@ -76,8 +76,5 @@ jobs:
           key: pio-${{ runner.os }}-${{ env.ESPHOME_VERSION }}
       - name: Build UI and compile firmware
         run: npm run build
-      - name: Bundle size
-        run: |
-          size=$(wc -c < dist/ui.js)
-          echo "dist/ui.js: ${size} bytes"
-          test "$size" -le 40960
+      - name: Bundle check
+        run: npm run check:bundle

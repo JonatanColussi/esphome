@@ -1,0 +1,41 @@
+{
+  "name": "tanquinho",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Phone UI and firmware build for the Tanquinho washing machine (ESPHome)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "prettier": "@colussi/prettier-config",
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "dev": "npm run build:ui && concurrently --kill-others --names ui,mock \"node scripts/build-ui.mjs --watch\" \"tsx dev/mock-server.ts\"",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.src.json",
+    "lint": "eslint . --ext .ts,.js,.mjs --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "jest",
+    "build": "npm run typecheck && npm run build:ui && esphome compile tanquinho.yaml",
+    "flash": "npm run build && esphome upload tanquinho.yaml --device ${TANQUINHO_HOST:-tanquinho.local}",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+  },
+  "devDependencies": {
+    "@colussi/eslint-config": "^2.2.1",
+    "@colussi/prettier-config": "^1.0.3",
+    "@colussi/tsconfig": "^2.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.6",
+    "concurrently": "^10.0.7",
+    "esbuild": "^0.28.2",
+    "eslint": "^8.57.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
+    "prettier": "^3.10.1",
+    "ts-jest": "^29.4.15",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

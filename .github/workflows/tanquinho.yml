@@ -1,0 +1,80 @@
+name: Tanquinho
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "projects/tanquinho/**"
+      - ".github/workflows/tanquinho.yml"
+  pull_request:
+    paths:
+      - "projects/tanquinho/**"
+      - ".github/workflows/tanquinho.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tanquinho-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ESPHOME_VERSION: "2026.4.1"
+
+defaults:
+  run:
+    working-directory: projects/tanquinho
+
+jobs:
+  check:
+    name: Types, lint, format and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: projects/tanquinho/.nvmrc
+          cache: npm
+          cache-dependency-path: projects/tanquinho/package-lock.json
+      - run: npm ci
+      - run: npm run check
+
+  firmware:
+    name: Firmware build (UI bundle + ESPHome compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: projects/tanquinho/.nvmrc
+          cache: npm
+          cache-dependency-path: projects/tanquinho/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/workflows/tanquinho.yml
+      - name: Install ESPHome
+        run: pip install "esphome==${ESPHOME_VERSION}"
+      - run: npm ci
+      # Throwaway secrets generated on every run: no real password ever reaches GitHub.
+      - name: Test secrets
+        run: |
+          cat > secrets.yaml <<EOF
+          wifi_ssid: "ci"
+          wifi_password: "$(openssl rand -hex 8)"
+          api_key: "$(openssl rand -base64 32)"
+          ota_password: "$(openssl rand -hex 16)"
+          ap_password: "$(openssl rand -hex 8)"
+          EOF
+      - name: PlatformIO cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            projects/tanquinho/.esphome/platformio
+          key: pio-${{ runner.os }}-${{ env.ESPHOME_VERSION }}
+      - name: Build UI and compile firmware
+        run: npm run build
+      - name: Bundle check
+        run: npm run check:bundle
